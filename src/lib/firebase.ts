@@ -29,26 +29,32 @@ function getApp(): FirebaseApp {
   return app;
 }
 
-export const auth: Auth = (() => {
+// Lazy getters - only initialize when actually called
+export function getAuthInstance(): Auth {
   if (!authInstance) {
     authInstance = getAuth(getApp());
   }
   return authInstance;
-})();
+}
 
-export const db: Firestore = (() => {
+export function getDb(): Firestore {
   if (!dbInstance) {
     dbInstance = getFirestore(getApp());
   }
   return dbInstance;
-})();
+}
 
-export const storage: FirebaseStorage = (() => {
+export function getStorageInstance(): FirebaseStorage {
   if (!storageInstance) {
     storageInstance = getStorage(getApp());
   }
   return storageInstance;
-})();
+}
+
+// For client-side components that need direct access
+export const auth: Auth = getAuthInstance();
+export const db: Firestore = getDb();
+export const storage: FirebaseStorage = getStorageInstance();
 
 export default getApp();
 

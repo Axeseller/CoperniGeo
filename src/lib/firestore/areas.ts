@@ -10,7 +10,7 @@ import {
   where,
   Timestamp,
 } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { getDb } from "@/lib/firebase";
 import { Area } from "@/types/area";
 import { GeoPoint } from "firebase/firestore";
 
@@ -36,6 +36,7 @@ function geoPointsToCoordinates(geoPoints: GeoPoint[]): { lat: number; lng: numb
  * Get all areas for a user
  */
 export async function getUserAreas(userId: string): Promise<Area[]> {
+  const db = getDb();
   const q = query(collection(db, AREAS_COLLECTION), where("userId", "==", userId));
   const querySnapshot = await getDocs(q);
   
@@ -56,6 +57,7 @@ export async function getUserAreas(userId: string): Promise<Area[]> {
  * Get a single area by ID
  */
 export async function getArea(areaId: string): Promise<Area | null> {
+  const db = getDb();
   const docRef = doc(db, AREAS_COLLECTION, areaId);
   const docSnap = await getDoc(docRef);
   
@@ -78,6 +80,7 @@ export async function getArea(areaId: string): Promise<Area | null> {
  * Create a new area
  */
 export async function createArea(area: Omit<Area, "id" | "createdAt" | "updatedAt">): Promise<string> {
+  const db = getDb();
   const areaData = {
     ...area,
     coordinates: coordinatesToGeoPoints(area.coordinates as any),
@@ -96,6 +99,7 @@ export async function updateArea(
   areaId: string,
   updates: Partial<Omit<Area, "id" | "userId" | "createdAt">>
 ): Promise<void> {
+  const db = getDb();
   const docRef = doc(db, AREAS_COLLECTION, areaId);
   const updateData: any = {
     ...updates,
@@ -113,6 +117,7 @@ export async function updateArea(
  * Delete an area
  */
 export async function deleteArea(areaId: string): Promise<void> {
+  const db = getDb();
   const docRef = doc(db, AREAS_COLLECTION, areaId);
   await deleteDoc(docRef);
 }

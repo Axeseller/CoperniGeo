@@ -10,7 +10,7 @@ import {
   where,
   Timestamp,
 } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { getDb } from "@/lib/firebase";
 import { Report, ReportFrequency } from "@/types/report";
 
 const REPORTS_COLLECTION = "reports";
@@ -41,6 +41,7 @@ function calculateNextRun(frequency: ReportFrequency, lastRun?: Date): Date {
  * Get all reports for a user
  */
 export async function getUserReports(userId: string): Promise<Report[]> {
+  const db = getDb();
   const q = query(collection(db, REPORTS_COLLECTION), where("userId", "==", userId));
   const querySnapshot = await getDocs(q);
   
@@ -57,6 +58,7 @@ export async function getUserReports(userId: string): Promise<Report[]> {
  * Get active reports that are due to run
  */
 export async function getDueReports(): Promise<Report[]> {
+  const db = getDb();
   const now = Timestamp.now();
   const q = query(
     collection(db, REPORTS_COLLECTION),
@@ -78,6 +80,7 @@ export async function getDueReports(): Promise<Report[]> {
  * Get a single report by ID
  */
 export async function getReport(reportId: string): Promise<Report | null> {
+  const db = getDb();
   const docRef = doc(db, REPORTS_COLLECTION, reportId);
   const docSnap = await getDoc(docRef);
   
@@ -103,6 +106,7 @@ export async function createReport(
 ): Promise<string> {
   const nextRun = calculateNextRun(report.frequency);
   
+  const db = getDb();
   const reportData = {
     ...report,
     nextRun: Timestamp.fromDate(nextRun),
@@ -120,6 +124,7 @@ export async function updateReport(
   reportId: string,
   updates: Partial<Omit<Report, "id" | "userId" | "createdAt">>
 ): Promise<void> {
+  const db = getDb();
   const docRef = doc(db, REPORTS_COLLECTION, reportId);
   const updateData: any = { ...updates };
   
@@ -145,6 +150,7 @@ export async function markReportGenerated(reportId: string): Promise<void> {
     throw new Error("Report not found");
   }
   
+  const db = getDb();
   const now = new Date();
   const nextRun = calculateNextRun(report.frequency, now);
   
@@ -158,6 +164,7 @@ export async function markReportGenerated(reportId: string): Promise<void> {
  * Delete a report
  */
 export async function deleteReport(reportId: string): Promise<void> {
+  const db = getDb();
   const docRef = doc(db, REPORTS_COLLECTION, reportId);
   await deleteDoc(docRef);
 }
