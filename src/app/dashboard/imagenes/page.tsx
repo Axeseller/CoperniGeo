@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { getUserAreas } from "@/lib/firestore/areas";
 import InteractiveMap from "@/components/map/InteractiveMap";
@@ -20,11 +20,7 @@ export default function ImagenesPage() {
   const [loading, setLoading] = useState(false);
   const [imageData, setImageData] = useState<SatelliteImageResponse | null>(null);
 
-  useEffect(() => {
-    loadAreas();
-  }, [user]);
-
-  const loadAreas = async () => {
+  const loadAreas = useCallback(async () => {
     if (!user) return;
     try {
       const userAreas = await getUserAreas(user.uid);
@@ -32,7 +28,11 @@ export default function ImagenesPage() {
     } catch (error) {
       console.error("Error loading areas:", error);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    loadAreas();
+  }, [loadAreas]);
 
   const handlePolygonComplete = (coordinates: { lat: number; lng: number }[]) => {
     setDrawnCoordinates(coordinates);

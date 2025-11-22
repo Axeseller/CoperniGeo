@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { getUserAreas } from "@/lib/firestore/areas";
 import { createReport, updateReport } from "@/lib/firestore/reports";
@@ -26,11 +26,7 @@ export default function ReportConfig({ onSave, initialData }: ReportConfigProps)
     email: initialData?.email || user?.email || "",
   });
 
-  useEffect(() => {
-    loadAreas();
-  }, [user]);
-
-  const loadAreas = async () => {
+  const loadAreas = useCallback(async () => {
     if (!user) return;
     try {
       const userAreas = await getUserAreas(user.uid);
@@ -38,7 +34,11 @@ export default function ReportConfig({ onSave, initialData }: ReportConfigProps)
     } catch (error) {
       console.error("Error loading areas:", error);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    loadAreas();
+  }, [loadAreas]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,7 +69,6 @@ export default function ReportConfig({ onSave, initialData }: ReportConfigProps)
       if (initialData?.id) {
         await updateReport(initialData.id, {
           ...formData,
-          userId: user.uid,
           deliveryMethod: "email",
           status: initialData.status,
         });

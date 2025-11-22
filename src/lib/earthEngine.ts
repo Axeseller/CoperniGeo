@@ -51,8 +51,7 @@ export async function initializeEarthEngine(): Promise<void> {
     // Initialize Earth Engine
     await new Promise<void>((resolve, reject) => {
       ee.initialize(
-        null,
-        null,
+        undefined,
         () => {
           initialized = true;
           resolve();
@@ -87,7 +86,12 @@ export async function testEarthEngineConnection(): Promise<boolean> {
     const ee = getEarthEngine();
     // Simple test: get a point
     const point = ee.Geometry.Point([0, 0]);
-    const test = point.getInfo();
+    const test = await new Promise<any>((resolve, reject) => {
+      point.getInfo((value: any, error?: Error) => {
+        if (error) reject(error);
+        else resolve(value);
+      });
+    });
     return test !== null;
   } catch (error) {
     console.error("Earth Engine connection test failed:", error);

@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from "next/server";
  * Cron job endpoint to generate reports
  * Configure in vercel.json to run daily
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     // Verify this is a cron request (optional: add secret verification)

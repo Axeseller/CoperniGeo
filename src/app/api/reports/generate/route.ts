@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
             });
 
             const statsValue = await new Promise<any>((resolve, reject) => {
-              stats.get((value: any, error: Error) => {
+              stats.get((value: any, error?: Error) => {
                 if (error) reject(error);
                 else resolve(value);
               });

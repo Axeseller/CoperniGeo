@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { getUserReports } from "@/lib/firestore/reports";
 import ReportConfig from "@/components/reports/ReportConfig";
@@ -14,11 +14,7 @@ export default function AutomatizarReportesPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingReport, setEditingReport] = useState<Report | null>(null);
 
-  useEffect(() => {
-    loadReports();
-  }, [user]);
-
-  const loadReports = async () => {
+  const loadReports = useCallback(async () => {
     if (!user) return;
     try {
       setLoading(true);
@@ -29,7 +25,11 @@ export default function AutomatizarReportesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    loadReports();
+  }, [loadReports]);
 
   const handleSave = () => {
     setShowForm(false);

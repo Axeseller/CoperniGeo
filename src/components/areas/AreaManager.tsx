@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { getUserAreas, createArea, updateArea, deleteArea } from "@/lib/firestore/areas";
 import { Area } from "@/types/area";
@@ -29,18 +29,7 @@ export default function AreaManager({
     drawnCoordinates
   );
 
-  useEffect(() => {
-    loadAreas();
-  }, [user]);
-
-  useEffect(() => {
-    if (drawnCoordinates) {
-      setFormCoordinates(drawnCoordinates);
-      setShowForm(true);
-    }
-  }, [drawnCoordinates]);
-
-  const loadAreas = async () => {
+  const loadAreas = useCallback(async () => {
     if (!user) return;
     try {
       setLoading(true);
@@ -51,7 +40,18 @@ export default function AreaManager({
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    loadAreas();
+  }, [loadAreas]);
+
+  useEffect(() => {
+    if (drawnCoordinates) {
+      setFormCoordinates(drawnCoordinates);
+      setShowForm(true);
+    }
+  }, [drawnCoordinates]);
 
   const handleCreate = async (
     area: Omit<Area, "id" | "userId" | "createdAt" | "updatedAt">

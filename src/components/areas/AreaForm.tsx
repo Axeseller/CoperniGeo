@@ -49,7 +49,6 @@ export default function AreaForm({
           lat: coord.latitude || coord.lat,
           lng: coord.longitude || coord.lng,
         })),
-        userId: initialData?.userId || "", // Will be set by parent
       });
     } catch (err: any) {
       setError(err.message || "Error al guardar el área");
