@@ -51,10 +51,9 @@ export function getStorageInstance(): FirebaseStorage {
   return storageInstance;
 }
 
-// For client-side components that need direct access
-export const auth: Auth = getAuthInstance();
-export const db: Firestore = getDb();
-export const storage: FirebaseStorage = getStorageInstance();
+// Note: Do NOT export auth, db, or storage directly as constants
+// They would initialize immediately during import, causing build errors
+// Use getAuthInstance(), getDb(), and getStorageInstance() instead
 
-export default getApp();
+export default getApp;
 

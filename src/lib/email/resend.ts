@@ -1,8 +1,22 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Lazy initialization to avoid build-time errors
+let resendInstance: Resend | null = null;
 
-export const resendClient = resend;
+function getResendClient(): Resend {
+  if (!resendInstance) {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      throw new Error("RESEND_API_KEY is not set");
+    }
+    resendInstance = new Resend(apiKey);
+  }
+  return resendInstance;
+}
+
+export function getResend(): Resend {
+  return getResendClient();
+}
 
 /**
  * Send an email using Resend
@@ -13,10 +27,7 @@ export async function sendEmail(
   html: string,
   from?: string
 ): Promise<void> {
-  if (!process.env.RESEND_API_KEY) {
-    throw new Error("RESEND_API_KEY is not set");
-  }
-
+  const resend = getResendClient();
   const fromEmail = from || process.env.RESEND_FROM_EMAIL || "noreply@copernigeo.com";
 
   await resend.emails.send({
