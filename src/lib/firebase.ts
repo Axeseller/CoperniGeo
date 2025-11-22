@@ -12,16 +12,43 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Initialize Firebase
-let app: FirebaseApp;
-if (getApps().length === 0) {
-  app = initializeApp(firebaseConfig);
-} else {
-  app = getApps()[0];
+// Lazy initialization to avoid build-time errors
+let app: FirebaseApp | null = null;
+let authInstance: Auth | null = null;
+let dbInstance: Firestore | null = null;
+let storageInstance: FirebaseStorage | null = null;
+
+function getApp(): FirebaseApp {
+  if (!app) {
+    if (getApps().length === 0) {
+      app = initializeApp(firebaseConfig);
+    } else {
+      app = getApps()[0];
+    }
+  }
+  return app;
 }
 
-export const auth: Auth = getAuth(app);
-export const db: Firestore = getFirestore(app);
-export const storage: FirebaseStorage = getStorage(app);
-export default app;
+export const auth: Auth = (() => {
+  if (!authInstance) {
+    authInstance = getAuth(getApp());
+  }
+  return authInstance;
+})();
+
+export const db: Firestore = (() => {
+  if (!dbInstance) {
+    dbInstance = getFirestore(getApp());
+  }
+  return dbInstance;
+})();
+
+export const storage: FirebaseStorage = (() => {
+  if (!storageInstance) {
+    storageInstance = getStorage(getApp());
+  }
+  return storageInstance;
+})();
+
+export default getApp();
 

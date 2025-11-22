@@ -7,6 +7,8 @@ import {
 } from "@/lib/firestore/reports";
 import { Report } from "@/types/report";
 
+export const dynamic = 'force-dynamic';
+
 // GET /api/reports/[id]
 export async function GET(
   request: NextRequest,

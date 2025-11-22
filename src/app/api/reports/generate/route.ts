@@ -7,6 +7,8 @@ import { uploadFile } from "@/lib/storage/upload";
 import { sendEmail } from "@/lib/email/resend";
 import { IndexType } from "@/types/report";
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     // Check for authorization (optional: add API key check)

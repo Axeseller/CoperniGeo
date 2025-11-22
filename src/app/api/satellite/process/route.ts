@@ -4,6 +4,8 @@ import { calculateIndex, getSentinel2Collection } from "@/lib/indices/calculatio
 import { SatelliteImageRequest, SatelliteImageResponse } from "@/types/satellite";
 import { IndexType } from "@/types/report";
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     // Initialize Earth Engine
