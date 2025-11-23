@@ -43,14 +43,40 @@ export default function AreaForm({
 
     setLoading(true);
     try {
+      // Normalize coordinates to ensure they're in { lat, lng } format
+      const normalizedCoordinates = areaCoordinates.map((coord: any) => {
+        // If it's already { lat, lng }, use it directly
+        if (coord.lat !== undefined && coord.lng !== undefined) {
+          return { lat: Number(coord.lat), lng: Number(coord.lng) };
+        }
+        // If it's GeoPoint or { latitude, longitude }, convert it
+        if (coord.latitude !== undefined && coord.longitude !== undefined) {
+          return { lat: Number(coord.latitude), lng: Number(coord.longitude) };
+        }
+        // If it's an array [lng, lat], convert it
+        if (Array.isArray(coord) && coord.length >= 2) {
+          return { lat: Number(coord[1]), lng: Number(coord[0]) };
+        }
+        throw new Error(`Formato de coordenada inválido: ${JSON.stringify(coord)}`);
+      });
+
+      console.log("Submitting area with normalized coordinates:", {
+        name: name.trim(),
+        coordinatesCount: normalizedCoordinates.length,
+        firstCoord: normalizedCoordinates[0],
+      });
+
       await onSubmit({
         name: name.trim(),
-        coordinates: areaCoordinates.map((coord: any) => ({
-          lat: coord.latitude || coord.lat,
-          lng: coord.longitude || coord.lng,
-        })),
+        coordinates: normalizedCoordinates,
       });
+      
+      // Reset form and close after successful save
+      setName("");
+      setError("");
+      onCancel();
     } catch (err: any) {
+      console.error("Error in AreaForm submit:", err);
       setError(err.message || "Error al guardar el área");
     } finally {
       setLoading(false);

@@ -1,0 +1,44 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // TEMPORARY DEBUG RULES - FOR TESTING ONLY
+    // These rules allow any authenticated user to create/read/update/delete
+    // Replace with proper rules from firestore.rules.example once working
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Areas collection - DEBUG VERSION (more permissive)
+    match /areas/{areaId} {
+      // Allow read if authenticated
+      allow read: if isAuthenticated();
+      
+      // Allow create if authenticated - SIMPLIFIED FOR DEBUG
+      allow create: if isAuthenticated() 
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.coordinates is list;
+      
+      // Allow update if authenticated and owns the resource
+      allow update: if isAuthenticated() 
+        && request.resource.data.userId == request.auth.uid;
+      
+      // Allow delete if authenticated and owns the resource
+      allow delete: if isAuthenticated() 
+        && resource.data.userId == request.auth.uid;
+    }
+    
+    // Reports collection - DEBUG VERSION
+    match /reports/{reportId} {
+      allow read, write: if isAuthenticated() 
+        && request.resource.data.userId == request.auth.uid;
+    }
+    
+    // Deny all other access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

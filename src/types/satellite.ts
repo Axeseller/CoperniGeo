@@ -15,5 +15,6 @@ export interface SatelliteImageResponse {
   maxValue: number;
   meanValue: number;
   date: string;
+  indexType: IndexType;
 }
 

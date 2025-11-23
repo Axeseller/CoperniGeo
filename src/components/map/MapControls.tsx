@@ -17,6 +17,7 @@ interface MapControlsProps {
   selectedAreaId?: string;
   onAreaSelect: (areaId: string) => void;
   loading?: boolean;
+  drawnCoordinates?: { lat: number; lng: number }[];
 }
 
 export default function MapControls({
@@ -25,6 +26,7 @@ export default function MapControls({
   selectedAreaId,
   onAreaSelect,
   loading = false,
+  drawnCoordinates,
 }: MapControlsProps) {
   const [indexType, setIndexType] = useState<IndexType>("NDVI");
   const [cloudCoverage, setCloudCoverage] = useState(20);
@@ -34,21 +36,26 @@ export default function MapControls({
   const [endDate, setEndDate] = useState(new Date().toISOString().split("T")[0]);
 
   const handleLoadImage = () => {
-    const selectedArea = areas.find((a) => a.id === selectedAreaId);
-    if (!selectedArea && !selectedAreaId) {
+    // Use drawn coordinates if available, otherwise use selected area
+    const coordinates = drawnCoordinates && drawnCoordinates.length >= 3
+      ? drawnCoordinates
+      : (() => {
+          const selectedArea = areas.find((a) => a.id === selectedAreaId);
+          return selectedArea?.coordinates
+            ? selectedArea.coordinates.map((coord: any) => ({
+                lat: coord.latitude || coord.lat,
+                lng: coord.longitude || coord.lng,
+              }))
+            : undefined;
+        })();
+
+    if (!coordinates || coordinates.length < 3) {
       alert("Por favor selecciona un área o dibuja un polígono en el mapa");
       return;
     }
 
-    const coordinates = selectedArea?.coordinates
-      ? selectedArea.coordinates.map((coord: any) => ({
-          lat: coord.latitude || coord.lat,
-          lng: coord.longitude || coord.lng,
-        }))
-      : undefined;
-
     onLoadImage({
-      areaId: selectedAreaId,
+      areaId: selectedAreaId || undefined,
       coordinates,
       indexType,
       cloudCoverage,
@@ -134,11 +141,17 @@ export default function MapControls({
 
       <button
         onClick={handleLoadImage}
-        disabled={loading || !selectedAreaId}
+        disabled={loading || (!selectedAreaId && (!drawnCoordinates || drawnCoordinates.length < 3))}
         className="w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {loading ? "Cargando..." : "Cargar Imagen"}
       </button>
+      
+      {!selectedAreaId && drawnCoordinates && drawnCoordinates.length >= 3 && (
+        <p className="text-xs text-gray-500 text-center">
+          Usando polígono dibujado ({drawnCoordinates.length} puntos)
+        </p>
+      )}
     </div>
   );
 }

@@ -1,4 +1,6 @@
 import * as ee from "@google/earthengine";
+import * as fs from "fs";
+import * as path from "path";
 
 let initialized = false;
 
@@ -22,26 +24,49 @@ export async function initializeEarthEngine(): Promise<void> {
         private_key: privateKey.replace(/\\n/g, "\n"),
       };
 
-      await ee.data.authenticateViaPrivateKey(
-        credentials,
-        () => {
-          console.log("Earth Engine authenticated via private key");
-        },
-        (error: Error) => {
-          throw new Error(`Earth Engine authentication failed: ${error.message}`);
-        }
-      );
+      await new Promise<void>((resolve, reject) => {
+        ee.data.authenticateViaPrivateKey(
+          credentials,
+          () => {
+            console.log("Earth Engine authenticated via private key");
+            resolve();
+          },
+          (error?: Error) => {
+            reject(new Error(`Earth Engine authentication failed: ${error?.message || "Unknown error"}`));
+          }
+        );
+      });
     } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
       // Use service account file path
-      await ee.data.authenticateViaPrivateKey(
-        require(process.env.GOOGLE_APPLICATION_CREDENTIALS),
-        () => {
-          console.log("Earth Engine authenticated via credentials file");
-        },
-        (error: Error) => {
-          throw new Error(`Earth Engine authentication failed: ${error.message}`);
-        }
-      );
+      const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+      if (!credentialsPath) {
+        throw new Error("GOOGLE_APPLICATION_CREDENTIALS is not set");
+      }
+
+      // Resolve the path (handle both absolute and relative paths)
+      const resolvedPath = path.isAbsolute(credentialsPath)
+        ? credentialsPath
+        : path.resolve(process.cwd(), credentialsPath);
+
+      // Read the credentials file
+      if (!fs.existsSync(resolvedPath)) {
+        throw new Error(`Credentials file not found: ${resolvedPath}`);
+      }
+
+      const credentialsFile = JSON.parse(fs.readFileSync(resolvedPath, "utf-8"));
+
+      await new Promise<void>((resolve, reject) => {
+        ee.data.authenticateViaPrivateKey(
+          credentialsFile,
+          () => {
+            console.log("Earth Engine authenticated via credentials file");
+            resolve();
+          },
+          (error?: Error) => {
+            reject(new Error(`Earth Engine authentication failed: ${error?.message || "Unknown error"}`));
+          }
+        );
+      });
     } else {
       throw new Error(
         "Earth Engine credentials not found. Please set EARTH_ENGINE_PRIVATE_KEY and EARTH_ENGINE_CLIENT_EMAIL, or GOOGLE_APPLICATION_CREDENTIALS"
@@ -50,16 +75,52 @@ export async function initializeEarthEngine(): Promise<void> {
 
     // Initialize Earth Engine
     await new Promise<void>((resolve, reject) => {
-      ee.initialize(
-        undefined,
-        () => {
-          initialized = true;
-          resolve();
-        },
-        (error: Error) => {
-          reject(new Error(`Earth Engine initialization failed: ${error.message}`));
-        }
-      );
+      try {
+        ee.initialize(
+          undefined,
+          () => {
+            initialized = true;
+            console.log("Earth Engine initialized successfully");
+            resolve();
+          },
+          (error?: Error | any) => {
+            // Handle different error types
+            let errorMessage = "Unknown error";
+            if (error) {
+              if (error instanceof Error) {
+                errorMessage = error.message;
+              } else if (typeof error === "string") {
+                errorMessage = error;
+              } else if (error.message) {
+                errorMessage = error.message;
+              } else {
+                errorMessage = JSON.stringify(error);
+              }
+            }
+            
+            console.error("Earth Engine initialization error details:", {
+              error,
+              errorType: typeof error,
+              errorConstructor: error?.constructor?.name,
+              errorString: String(error),
+              errorKeys: error ? Object.keys(error) : [],
+            });
+            
+            // Check for common error scenarios
+            if (!errorMessage || errorMessage === "Unknown error") {
+              errorMessage = "Failed to initialize Earth Engine. Please verify:\n" +
+                "1. Your service account is registered in Earth Engine (https://code.earthengine.google.com/settings/serviceaccounts)\n" +
+                "2. Your credentials (EARTH_ENGINE_PRIVATE_KEY and EARTH_ENGINE_CLIENT_EMAIL) are correct\n" +
+                "3. Your Earth Engine account has been approved";
+            }
+            
+            reject(new Error(`Earth Engine initialization failed: ${errorMessage}`));
+          }
+        );
+      } catch (err: any) {
+        console.error("Exception during ee.initialize call:", err);
+        reject(new Error(`Earth Engine initialization failed: ${err?.message || "Exception during initialization"}`));
+      }
     });
   } catch (error) {
     console.error("Error initializing Earth Engine:", error);

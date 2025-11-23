@@ -57,27 +57,24 @@ Para configurar Google Earth Engine:
 3. Habilita la API de Google Earth Engine:
    - Ve a APIs & Services > Library
    - Busca "Google Earth Engine API" y habilítala
-4. Crea una cuenta de servicio:
+4. **Crea una cuenta de servicio:**
    - Ve a IAM & Admin > Service Accounts
    - Crea una nueva cuenta de servicio
    - **Asigna los siguientes roles:**
-     - `Storage Object Viewer` (roles/storage.objectViewer) - para acceder a datos de Earth Engine
-     - `Compute Engine Service Agent` (roles/compute.serviceAgent) - para procesamiento
-     - Si está disponible: `Earth Engine User` (rol específico de Earth Engine)
-   - Descarga la clave JSON
-   - Para producción, usa las variables de entorno individuales
-5. **Registra la cuenta de servicio en Earth Engine:**
+     - `Earth Engine Resource Writer` (roles/earthengine.writer) - **NECESARIO** para acceder y procesar datos
+     - `Storage Object Viewer` (roles/storage.objectViewer) - para acceder a datos almacenados
+   - Descarga la clave JSON haciendo clic en la cuenta de servicio > Keys > Add Key > Create new key > JSON
+   - Para producción, usa las variables de entorno individuales (extrae `private_key` y `client_email` del JSON)
+5. **Registra tu proyecto en Google Earth Engine:**
    - Ve al [Earth Engine Code Editor](https://code.earthengine.google.com/)
-   - Inicia sesión con tu cuenta de Google (la misma que usaste para registrarte como no comercial)
-   - **Opción 1 (más directa):** Ve directamente a: https://code.earthengine.google.com/settings/serviceaccounts
-   - **Opción 2:** 
-     - Haz clic en tu perfil/avatar (esquina superior derecha)
-     - Busca "Settings" o "Configuración" en el menú
-     - O ve a la pestaña "Assets" (arriba a la izquierda) y busca "Service Accounts"
-   - En la sección **"Service Accounts"**, haz clic en **"Add Service Account"** o **"Agregar cuenta de servicio"**
-   - Ingresa el email de tu cuenta de servicio (termina en `@project.iam.gserviceaccount.com`)
-   - Haz clic en **"Add"** o **"Agregar"**
-   - **Nota:** Esto es **necesario** además de los roles de IAM en Google Cloud Console
+   - Inicia sesión con tu cuenta de Google (la misma que usaste para registrarte como no comercial/comercial)
+   - Si es tu primera vez usando Earth Engine, puede que necesites aceptar los términos y condiciones
+   - **Nota importante:** Para uso con la API de Earth Engine en servidores (Node.js), no necesitas registrar la cuenta de servicio manualmente en Earth Engine Code Editor. Solo necesitas:
+     1. Crear la cuenta de servicio en Google Cloud Console (paso 4)
+     2. Asignar los roles correctos
+     3. Descargar la clave JSON
+     4. Usar las credenciales en tu código
+   - La cuenta de servicio funcionará automáticamente si tiene los permisos correctos en Google Cloud Console
 
 #### Google Maps
 ```env
@@ -193,9 +190,21 @@ El proyecto está preparado para desplegarse en Vercel:
 ### Notas importantes
 
 - **Google Earth Engine**: Requiere solicitar acceso y configurar una cuenta de servicio
-- **Firestore Security Rules**: Configura reglas de seguridad para proteger los datos de usuarios
+- **Firestore Security Rules**: **IMPORTANTE** - Debes configurar las reglas de seguridad en Firebase Console. Usa el archivo `firestore.rules.example` como referencia y cópialo a Firebase Console > Firestore > Rules
 - **Firebase Storage Rules**: Configura reglas para el almacenamiento de reportes
 - **Cron Jobs**: Se ejecutan diariamente a las 6 AM UTC para generar reportes automáticos
+
+#### Configurar Firestore Security Rules
+
+Si las áreas no se están guardando o cargando, probablemente necesitas configurar las reglas de seguridad de Firestore:
+
+1. Ve a [Firebase Console](https://console.firebase.google.com/)
+2. Selecciona tu proyecto
+3. Ve a **Firestore Database** > **Rules**
+4. Copia el contenido de `firestore.rules.example` y pégalo en el editor de reglas
+5. Haz clic en **Publish** para guardar las reglas
+
+**⚠️ Sin estas reglas, las áreas no se guardarán ni cargarán correctamente.**
 
 ## Licencia
 

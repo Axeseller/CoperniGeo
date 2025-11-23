@@ -6,6 +6,9 @@ import { getUserAreas } from "@/lib/firestore/areas";
 import InteractiveMap from "@/components/map/InteractiveMap";
 import MapControls from "@/components/map/MapControls";
 import AreaManager from "@/components/areas/AreaManager";
+import FirestoreTest from "@/components/debug/FirestoreTest";
+import FirestoreConnectionTest from "@/components/debug/FirestoreConnectionTest";
+import FirestoreSetupChecker from "@/components/debug/FirestoreSetupChecker";
 import { Area } from "@/types/area";
 import { IndexType } from "@/types/report";
 import { SatelliteImageResponse } from "@/types/satellite";
@@ -21,16 +24,23 @@ export default function ImagenesPage() {
   const [imageData, setImageData] = useState<SatelliteImageResponse | null>(null);
 
   const loadAreas = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      setAreas([]);
+      return;
+    }
+    
     try {
       const userAreas = await getUserAreas(user.uid);
       setAreas(userAreas);
     } catch (error) {
       console.error("Error loading areas:", error);
+      // Set empty array on error to prevent UI blocking
+      setAreas([]);
     }
   }, [user]);
 
   useEffect(() => {
+    // Load areas in background without blocking
     loadAreas();
   }, [loadAreas]);
 
@@ -53,8 +63,17 @@ export default function ImagenesPage() {
       const coordinates = params.coordinates || [];
       if (coordinates.length < 3) {
         alert("Se requieren al menos 3 puntos para un polígono");
+        setLoading(false);
         return;
       }
+
+      console.log("Cargando imagen satelital con parámetros:", {
+        coordinates: coordinates.length,
+        indexType: params.indexType,
+        cloudCoverage: params.cloudCoverage,
+        startDate: params.startDate,
+        endDate: params.endDate,
+      });
 
       const response = await fetch("/api/satellite/process", {
         method: "POST",
@@ -70,16 +89,18 @@ export default function ImagenesPage() {
         }),
       });
 
+      const responseData = await response.json();
+
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Error al procesar la imagen");
+        console.error("Error del servidor:", responseData);
+        throw new Error(responseData.error || `Error al procesar la imagen (${response.status})`);
       }
 
-      const data: SatelliteImageResponse = await response.json();
-      setImageData(data);
+      console.log("Imagen cargada exitosamente:", responseData);
+      setImageData(responseData);
     } catch (error: any) {
       console.error("Error loading image:", error);
-      alert(error.message || "Error al cargar la imagen satelital");
+      alert(error.message || "Error al cargar la imagen satelital. Revisa la consola para más detalles.");
     } finally {
       setLoading(false);
     }
@@ -102,6 +123,10 @@ export default function ImagenesPage() {
               areas={areas}
               selectedAreaId={selectedAreaId}
               onAreaSelect={setSelectedAreaId}
+              tileUrl={imageData?.tileUrl}
+              indexType={imageData?.indexType}
+              minValue={imageData?.minValue}
+              maxValue={imageData?.maxValue}
             />
           </div>
 
@@ -112,6 +137,7 @@ export default function ImagenesPage() {
               selectedAreaId={selectedAreaId}
               onAreaSelect={setSelectedAreaId}
               loading={loading}
+              drawnCoordinates={drawnCoordinates || undefined}
             />
           </div>
 
@@ -136,6 +162,13 @@ export default function ImagenesPage() {
               </div>
             </div>
           )}
+
+          {/* Temporary Firestore Debug Component */}
+          <div className="space-y-4">
+        <FirestoreSetupChecker />
+        <FirestoreConnectionTest />
+        <FirestoreTest />
+      </div>
         </div>
 
         {/* Area Manager Sidebar */}

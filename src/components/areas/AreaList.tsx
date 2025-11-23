@@ -19,9 +19,9 @@ export default function AreaList({
 }: AreaListProps) {
   if (areas.length === 0) {
     return (
-      <div className="text-center text-gray-500 py-8">
-        <p>No hay áreas guardadas</p>
-        <p className="text-sm mt-2">Dibuja un polígono en el mapa para crear una</p>
+      <div className="text-center text-gray-500 py-4">
+        <p className="text-sm">No hay áreas guardadas</p>
+        <p className="text-xs mt-1 text-gray-400">Dibuja un polígono en el mapa para crear una</p>
       </div>
     );
   }

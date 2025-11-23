@@ -30,13 +30,33 @@ export default function AreaManager({
   );
 
   const loadAreas = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      console.log("No user, skipping area load");
+      setAreas([]);
+      setLoading(false);
+      return;
+    }
+    
+    // Set loading state but don't block the UI - allow interaction while loading
+    setLoading(true);
+    
     try {
-      setLoading(true);
+      console.log("Loading areas for user:", user.uid);
       const userAreas = await getUserAreas(user.uid);
+      console.log("Loaded areas:", userAreas.length, userAreas);
       setAreas(userAreas);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error loading areas:", error);
+      // Don't show alert for timeout errors - just log and continue
+      if (!error.message?.includes("timeout") && !error.message?.includes("Timeout")) {
+        console.error("Error details:", {
+          code: error.code,
+          message: error.message,
+          stack: error.stack,
+        });
+      }
+      // Always set empty array on error to prevent UI blocking
+      setAreas([]);
     } finally {
       setLoading(false);
     }
@@ -56,23 +76,48 @@ export default function AreaManager({
   const handleCreate = async (
     area: Omit<Area, "id" | "userId" | "createdAt" | "updatedAt">
   ) => {
-    if (!user) return;
-    await createArea({ ...area, userId: user.uid });
-    await loadAreas();
-    setShowForm(false);
-    setFormCoordinates(undefined);
-    if (onCoordinatesClear) onCoordinatesClear();
+    if (!user) {
+      console.error("User not authenticated");
+      throw new Error("Debes iniciar sesión para guardar áreas");
+    }
+    
+    try {
+      console.log("Creating area:", { ...area, userId: user.uid });
+      const areaId = await createArea({ ...area, userId: user.uid });
+      console.log("Area created successfully with ID:", areaId);
+      await loadAreas();
+      setShowForm(false);
+      setFormCoordinates(undefined);
+      if (onCoordinatesClear) onCoordinatesClear();
+    } catch (error: any) {
+      console.error("Error creating area:", error);
+      console.error("Error details:", {
+        code: error.code,
+        message: error.message,
+        stack: error.stack,
+      });
+      // Re-throw the error so it can be caught by AreaForm
+      throw error;
+    }
   };
 
   const handleUpdate = async (
     area: Omit<Area, "id" | "userId" | "createdAt" | "updatedAt">
   ) => {
-    if (!editingArea?.id) return;
-    await updateArea(editingArea.id, area);
-    await loadAreas();
-    setShowForm(false);
-    setEditingArea(null);
-    setFormCoordinates(undefined);
+    if (!editingArea?.id) {
+      throw new Error("No hay área seleccionada para actualizar");
+    }
+    
+    try {
+      await updateArea(editingArea.id, area);
+      await loadAreas();
+      setShowForm(false);
+      setEditingArea(null);
+      setFormCoordinates(undefined);
+    } catch (error: any) {
+      console.error("Error updating area:", error);
+      throw error;
+    }
   };
 
   const handleDelete = async (areaId: string) => {
@@ -89,9 +134,10 @@ export default function AreaManager({
     setShowForm(true);
   };
 
-  if (loading) {
-    return <div className="text-center py-4">Cargando áreas...</div>;
-  }
+  // Don't block the UI while loading - show the form/list with a loading indicator
+  // if (loading) {
+  //   return <div className="text-center py-4">Cargando áreas...</div>;
+  // }
 
   return (
     <div className="space-y-4">
@@ -110,6 +156,12 @@ export default function AreaManager({
           </button>
         )}
       </div>
+
+      {loading && areas.length === 0 && (
+        <div className="text-center py-2 text-sm text-gray-500">
+          Cargando áreas...
+        </div>
+      )}
 
       {showForm ? (
         <AreaForm

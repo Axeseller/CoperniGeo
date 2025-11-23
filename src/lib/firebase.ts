@@ -1,6 +1,13 @@
 import { initializeApp, getApps, FirebaseApp } from "firebase/app";
 import { getAuth, Auth } from "firebase/auth";
-import { getFirestore, Firestore } from "firebase/firestore";
+import { 
+  getFirestore, 
+  Firestore, 
+  initializeFirestore,
+  memoryLocalCache,
+  persistentLocalCache,
+  persistentSingleTabManager
+} from "firebase/firestore";
 import { getStorage, FirebaseStorage } from "firebase/storage";
 
 const firebaseConfig = {
@@ -39,7 +46,16 @@ export function getAuthInstance(): Auth {
 
 export function getDb(): Firestore {
   if (!dbInstance) {
-    dbInstance = getFirestore(getApp());
+    const app = getApp();
+    console.log("Initializing Firestore for app:", app.name, "Project ID:", firebaseConfig.projectId);
+    
+    // Initialize Firestore with memory-only cache (no offline persistence)
+    // This prevents writes from hanging due to offline persistence issues
+    dbInstance = initializeFirestore(app, {
+      localCache: memoryLocalCache()
+    });
+    
+    console.log("✅ Firestore initialized with memory-only cache (no offline persistence)");
   }
   return dbInstance;
 }

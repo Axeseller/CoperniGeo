@@ -21,6 +21,10 @@ interface InteractiveMapProps {
   areas?: Area[];
   selectedAreaId?: string;
   onAreaSelect?: (areaId: string) => void;
+  tileUrl?: string;
+  indexType?: string;
+  minValue?: number;
+  maxValue?: number;
 }
 
 export default function InteractiveMap({
@@ -28,10 +32,16 @@ export default function InteractiveMap({
   areas = [],
   selectedAreaId,
   onAreaSelect,
+  tileUrl,
+  indexType,
+  minValue,
+  maxValue,
 }: InteractiveMapProps) {
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [drawnPolygon, setDrawnPolygon] = useState<{ lat: number; lng: number }[] | null>(null);
+  const [showSatelliteLayer, setShowSatelliteLayer] = useState(false);
   const drawingManagerRef = useRef<google.maps.drawing.DrawingManager | null>(null);
+  const overlayRef = useRef<google.maps.ImageMapType | null>(null);
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: "google-map-script",
@@ -82,6 +92,72 @@ export default function InteractiveMap({
       drawingManagerRef.current.setDrawingMode(null);
     }
   }, []);
+
+  // Add/remove satellite tile overlay
+  useEffect(() => {
+    if (!map || !tileUrl) return;
+
+    // Remove existing overlay
+    if (overlayRef.current) {
+      try {
+        const index = map.overlayMapTypes.getLength() - 1;
+        if (index >= 0) {
+          map.overlayMapTypes.removeAt(index);
+        }
+      } catch (e) {
+        // Ignore if already removed
+      }
+      overlayRef.current = null;
+    }
+
+    if (showSatelliteLayer && tileUrl) {
+      const overlay = new google.maps.ImageMapType({
+        getTileUrl: (coord, zoom) => {
+          if (coord.x < 0 || coord.y < 0) return "";
+          const maxCoord = 1 << zoom;
+          if (coord.x >= maxCoord || coord.y >= maxCoord) return "";
+          
+          // Earth Engine tile URL format uses {x}, {y}, {z} or uses base URL with query params
+          // Handle both formats
+          let url = tileUrl;
+          if (url.includes("{x}") || url.includes("{y}") || url.includes("{z}")) {
+            url = url
+              .replace(/{x}/g, coord.x.toString())
+              .replace(/{y}/g, coord.y.toString())
+              .replace(/{z}/g, zoom.toString());
+          } else {
+            // If format doesn't have placeholders, assume it's a base URL and append coordinates
+            // This is for Earth Engine's tile_fetcher format which may have a different structure
+            url = `${tileUrl}&x=${coord.x}&y=${coord.y}&z=${zoom}`;
+          }
+          
+          return url;
+        },
+        tileSize: new google.maps.Size(256, 256),
+        maxZoom: 18,
+        minZoom: 0,
+        name: indexType || "Satellite Index",
+        opacity: 0.7, // Semi-transparent so base map shows through
+      });
+
+      map.overlayMapTypes.push(overlay);
+      overlayRef.current = overlay;
+    }
+
+    return () => {
+      if (overlayRef.current && map) {
+        try {
+          const index = map.overlayMapTypes.getLength() - 1;
+          if (index >= 0) {
+            map.overlayMapTypes.removeAt(index);
+          }
+        } catch (e) {
+          // Ignore if already removed
+        }
+        overlayRef.current = null;
+      }
+    };
+  }, [map, tileUrl, showSatelliteLayer, indexType]);
 
   useEffect(() => {
     if (map && selectedAreaId && areas.length > 0) {
@@ -192,13 +268,65 @@ export default function InteractiveMap({
         )}
       </GoogleMap>
 
-      {drawnPolygon && (
-        <button
-          onClick={clearDrawing}
-          className="absolute top-4 right-4 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
-        >
-          Limpiar dibujo
-        </button>
+      <div className="absolute top-4 right-4 flex flex-col gap-2">
+        {tileUrl && (
+          <button
+            onClick={() => setShowSatelliteLayer(!showSatelliteLayer)}
+            className={`px-4 py-2 rounded text-sm font-medium ${
+              showSatelliteLayer
+                ? "bg-green-600 text-white"
+                : "bg-white text-gray-700 border border-gray-300"
+            } hover:bg-green-700 transition-colors`}
+          >
+            {showSatelliteLayer ? "Ocultar Índice" : "Mostrar Índice"}
+          </button>
+        )}
+        {drawnPolygon && (
+          <button
+            onClick={clearDrawing}
+            className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 text-sm"
+          >
+            Limpiar dibujo
+          </button>
+        )}
+      </div>
+
+      {/* Color Legend */}
+      {showSatelliteLayer && tileUrl && indexType && (
+        <div className="absolute bottom-4 left-4 bg-white p-3 rounded-lg shadow-lg border border-gray-200 max-w-xs">
+          <h4 className="text-sm font-semibold text-gray-900 mb-2">{indexType}</h4>
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <div
+                className={`h-4 rounded flex-1 ${
+                  indexType === "NDVI" || indexType === "NDRE"
+                    ? "bg-gradient-to-r from-red-500 via-yellow-500 to-green-500"
+                    : "bg-gradient-to-r from-blue-500 via-cyan-500 via-yellow-500 via-orange-500 to-red-500"
+                }`}
+              ></div>
+            </div>
+            <div className="flex justify-between text-xs text-gray-600">
+              <span>{minValue !== undefined ? minValue.toFixed(3) : "Bajo"}</span>
+              <span>{maxValue !== undefined ? maxValue.toFixed(3) : "Alto"}</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              {indexType === "NDVI" || indexType === "NDRE" ? (
+                <span>
+                  <span className="text-red-600">Rojo</span> = Bajo |{" "}
+                  <span className="text-yellow-600">Amarillo</span> = Medio |{" "}
+                  <span className="text-green-600">Verde</span> = Alto
+                </span>
+              ) : (
+                <span>
+                  <span className="text-blue-600">Azul</span> = Bajo |{" "}
+                  <span className="text-cyan-600">Cian</span>/<span className="text-yellow-600">Amarillo</span>/
+                  <span className="text-orange-600">Naranja</span> = Medio |{" "}
+                  <span className="text-red-600">Rojo</span> = Alto
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
       )}
     </div>
   );
