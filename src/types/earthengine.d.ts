@@ -16,21 +16,28 @@ declare module "@google/earthengine" {
       geometry: Geometry;
       scale: number;
       maxPixels?: number;
+      bestEffort?: boolean;
+      tileScale?: number;
     }): ComputedObject;
-    getMapId(options: {
-      min: number;
-      max: number;
-      palette: string[];
-    }): { tile_fetcher: { url_format: string } };
+    getMapId(
+      options: {
+        min: number;
+        max: number;
+        palette: string[];
+      },
+      callback?: (result: any, error?: Error) => void
+    ): any;
     getInfo(callback: (value: any, error?: Error) => void): void;
   }
 
   export interface ImageCollection {
     filterDate(start: string, end: string): ImageCollection;
     filter(filter: Filter): ImageCollection;
+    filterBounds(geometry: Geometry): ImageCollection;
     map(callback: (image: Image) => Image): ImageCollection;
     sort(property: string, ascending?: boolean): ImageCollection;
     first(): Image;
+    size(): ComputedObject;
   }
 
   export interface Geometry {
@@ -49,6 +56,7 @@ declare module "@google/earthengine" {
 
   export interface ComputedObject {
     get(callback: (value: any, error?: Error) => void): void;
+    getInfo(callback: (value: any, error?: Error) => void): void;
   }
 
   export const data: {
@@ -61,8 +69,10 @@ declare module "@google/earthengine" {
 
   export function initialize(
     url?: string | null,
+    tileUrl?: string | null,
     onSuccess?: () => void,
-    onError?: (error: Error) => void
+    onError?: (error: Error) => void,
+    authArgs?: any
   ): void;
 
   export const Geometry: {
