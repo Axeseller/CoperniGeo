@@ -9,13 +9,24 @@ let initialized = false;
  */
 export async function initializeEarthEngine(): Promise<void> {
   if (initialized) {
+    console.log("✅ Earth Engine already initialized");
     return;
   }
 
   try {
+    console.log("🔵 Starting Earth Engine initialization...");
+    
     // Check if credentials are provided via environment variables
     const privateKey = process.env.EARTH_ENGINE_PRIVATE_KEY;
     const clientEmail = process.env.EARTH_ENGINE_CLIENT_EMAIL;
+
+    console.log("🔵 Credentials check:", {
+      hasPrivateKey: !!privateKey,
+      privateKeyLength: privateKey?.length || 0,
+      privateKeyStart: privateKey?.substring(0, 30) + "...",
+      hasClientEmail: !!clientEmail,
+      clientEmail: clientEmail,
+    });
 
     if (privateKey && clientEmail) {
       // Use service account credentials from environment variables
@@ -24,14 +35,25 @@ export async function initializeEarthEngine(): Promise<void> {
         private_key: privateKey.replace(/\\n/g, "\n"),
       };
 
+      console.log("🔵 Credentials prepared:", {
+        client_email: credentials.client_email,
+        private_key_length: credentials.private_key.length,
+        private_key_start: credentials.private_key.substring(0, 50) + "...",
+        has_begin_marker: credentials.private_key.includes("-----BEGIN PRIVATE KEY-----"),
+        has_end_marker: credentials.private_key.includes("-----END PRIVATE KEY-----"),
+        newline_count: (credentials.private_key.match(/\n/g) || []).length,
+      });
+
+      console.log("🔵 Calling ee.data.authenticateViaPrivateKey...");
       await new Promise<void>((resolve, reject) => {
         ee.data.authenticateViaPrivateKey(
           credentials,
           () => {
-            console.log("Earth Engine authenticated via private key");
+            console.log("✅ Earth Engine authenticated via private key");
             resolve();
           },
           (error?: Error) => {
+            console.error("❌ Authentication failed:", error);
             reject(new Error(`Earth Engine authentication failed: ${error?.message || "Unknown error"}`));
           }
         );
@@ -73,14 +95,23 @@ export async function initializeEarthEngine(): Promise<void> {
       );
     }
 
-    // Initialize Earth Engine
+    // Initialize Earth Engine with the project ID
+    console.log("🔵 Calling ee.initialize...");
+    
+    // Try to get project ID from the service account email
+    const projectId = clientEmail?.split('@')[1]?.split('.')[0] || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'copernigeo';
+    console.log("🔵 Using project ID:", projectId);
+    
     await new Promise<void>((resolve, reject) => {
       try {
+        // Initialize with project parameter
+        // According to Earth Engine docs, we can pass null or a config object
         ee.initialize(
-          undefined,
+          null, // opt_baseurl
+          null, // opt_tileurl  
           () => {
             initialized = true;
-            console.log("Earth Engine initialized successfully");
+            console.log("✅ Earth Engine initialized successfully");
             resolve();
           },
           (error?: Error | any) => {
@@ -98,27 +129,36 @@ export async function initializeEarthEngine(): Promise<void> {
               }
             }
             
-            console.error("Earth Engine initialization error details:", {
+            console.error("❌ Earth Engine initialization error:", {
               error,
               errorType: typeof error,
               errorConstructor: error?.constructor?.name,
               errorString: String(error),
               errorKeys: error ? Object.keys(error) : [],
+              fullError: JSON.stringify(error, null, 2),
             });
             
-            // Check for common error scenarios
-            if (!errorMessage || errorMessage === "Unknown error") {
-              errorMessage = "Failed to initialize Earth Engine. Please verify:\n" +
-                "1. Your service account is registered in Earth Engine (https://code.earthengine.google.com/settings/serviceaccounts)\n" +
-                "2. Your credentials (EARTH_ENGINE_PRIVATE_KEY and EARTH_ENGINE_CLIENT_EMAIL) are correct\n" +
-                "3. Your Earth Engine account has been approved";
+            // Provide more specific error message
+            if (errorMessage.includes("403") || errorMessage.includes("permission") || errorMessage.includes("unauthorized")) {
+              errorMessage = "Permission denied. Your service account might not have Earth Engine access. Please:\n" +
+                "1. Go to https://console.cloud.google.com/apis/library/earthengine.googleapis.com?project=copernigeo\n" +
+                "2. Enable the 'Earth Engine API' for your project\n" +
+                "3. Ensure your service account has these roles:\n" +
+                "   - Earth Engine Resource Admin\n" +
+                "   - Earth Engine Resource Writer";
+            } else if (!errorMessage || errorMessage === "Unknown error") {
+              errorMessage = "Failed to initialize Earth Engine. Possible causes:\n" +
+                "1. Earth Engine API not enabled: https://console.cloud.google.com/apis/library/earthengine.googleapis.com\n" +
+                "2. Service account missing required roles\n" +
+                "3. Invalid credentials format";
             }
             
             reject(new Error(`Earth Engine initialization failed: ${errorMessage}`));
-          }
+          },
+          null // opt_authArgs (we already authenticated)
         );
       } catch (err: any) {
-        console.error("Exception during ee.initialize call:", err);
+        console.error("❌ Exception during ee.initialize call:", err);
         reject(new Error(`Earth Engine initialization failed: ${err?.message || "Exception during initialization"}`));
       }
     });

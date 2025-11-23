@@ -177,7 +177,7 @@ export default function FirestoreSetupChecker() {
       <div className="mt-4 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
         <p className="text-sm text-yellow-900 font-semibold mb-2">⚠️ Why writes are failing:</p>
         <p className="text-sm text-yellow-800">
-          If this test shows "WRITE FAILED", it means <strong>Firestore database is not enabled</strong> in your 
+          If this test shows &quot;WRITE FAILED&quot;, it means <strong>Firestore database is not enabled</strong> in your 
           Firebase project. The Firebase SDK can initialize and even read some data, but writes require the 
           actual Firestore database service to be provisioned in Firebase Console.
         </p>
