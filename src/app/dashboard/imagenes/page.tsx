@@ -6,10 +6,6 @@ import { getUserAreas } from "@/lib/firestore/areas";
 import InteractiveMap from "@/components/map/InteractiveMap";
 import MapControls from "@/components/map/MapControls";
 import AreaManager from "@/components/areas/AreaManager";
-import FirestoreTest from "@/components/debug/FirestoreTest";
-import FirestoreConnectionTest from "@/components/debug/FirestoreConnectionTest";
-import FirestoreSetupChecker from "@/components/debug/FirestoreSetupChecker";
-import EarthEngineSetupChecker from "@/components/debug/EarthEngineSetupChecker";
 import { Area } from "@/types/area";
 import { IndexType } from "@/types/report";
 import { SatelliteImageResponse } from "@/types/satellite";
@@ -163,14 +159,6 @@ export default function ImagenesPage() {
               </div>
             </div>
           )}
-
-          {/* Temporary Debug Components */}
-          <div className="space-y-4">
-        <EarthEngineSetupChecker />
-        <FirestoreSetupChecker />
-        <FirestoreConnectionTest />
-        <FirestoreTest />
-      </div>
         </div>
 
         {/* Area Manager Sidebar */}
