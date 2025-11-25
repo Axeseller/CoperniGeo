@@ -12,6 +12,7 @@ interface AreaManagerProps {
   selectedAreaId?: string;
   drawnCoordinates?: { lat: number; lng: number }[];
   onCoordinatesClear?: () => void;
+  onAreaCreated?: () => void;
 }
 
 export default function AreaManager({
@@ -19,6 +20,7 @@ export default function AreaManager({
   selectedAreaId,
   drawnCoordinates,
   onCoordinatesClear,
+  onAreaCreated,
 }: AreaManagerProps) {
   const { user } = useAuth();
   const [areas, setAreas] = useState<Area[]>([]);
@@ -86,6 +88,10 @@ export default function AreaManager({
       const areaId = await createArea({ ...area, userId: user.uid });
       console.log("Area created successfully with ID:", areaId);
       await loadAreas();
+      // Notify parent component to reload its areas list
+      if (onAreaCreated) {
+        onAreaCreated();
+      }
       setShowForm(false);
       setFormCoordinates(undefined);
       if (onCoordinatesClear) onCoordinatesClear();

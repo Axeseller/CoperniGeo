@@ -3,6 +3,7 @@
 import { useCallback, useRef, useEffect, useState } from "react";
 import { GoogleMap, useJsApiLoader, DrawingManager, Polygon } from "@react-google-maps/api";
 import { Area } from "@/types/area";
+import { SatelliteImageResponse } from "@/types/satellite";
 
 const libraries: ("drawing" | "places")[] = ["drawing"];
 
@@ -21,10 +22,7 @@ interface InteractiveMapProps {
   areas?: Area[];
   selectedAreaId?: string;
   onAreaSelect?: (areaId: string) => void;
-  tileUrl?: string;
-  indexType?: string;
-  minValue?: number;
-  maxValue?: number;
+  imageDataList?: SatelliteImageResponse[];
 }
 
 export default function InteractiveMap({
@@ -32,16 +30,13 @@ export default function InteractiveMap({
   areas = [],
   selectedAreaId,
   onAreaSelect,
-  tileUrl,
-  indexType,
-  minValue,
-  maxValue,
+  imageDataList = [],
 }: InteractiveMapProps) {
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [drawnPolygon, setDrawnPolygon] = useState<{ lat: number; lng: number }[] | null>(null);
-  const [showSatelliteLayer, setShowSatelliteLayer] = useState(false);
+  const [visibleIndices, setVisibleIndices] = useState<Set<string>>(new Set());
   const drawingManagerRef = useRef<google.maps.drawing.DrawingManager | null>(null);
-  const overlayRef = useRef<google.maps.ImageMapType | null>(null);
+  const overlaysRef = useRef<Map<string, google.maps.ImageMapType>>(new Map());
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: "google-map-script",
@@ -93,71 +88,73 @@ export default function InteractiveMap({
     }
   }, []);
 
-  // Add/remove satellite tile overlay
-  useEffect(() => {
-    if (!map || !tileUrl) return;
-
-    // Remove existing overlay
-    if (overlayRef.current) {
-      try {
-        const index = map.overlayMapTypes.getLength() - 1;
-        if (index >= 0) {
-          map.overlayMapTypes.removeAt(index);
-        }
-      } catch (e) {
-        // Ignore if already removed
+  // Toggle visibility of an index
+  const toggleIndexVisibility = (indexType: string) => {
+    setVisibleIndices((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(indexType)) {
+        newSet.delete(indexType);
+      } else {
+        newSet.add(indexType);
       }
-      overlayRef.current = null;
-    }
+      return newSet;
+    });
+  };
 
-    if (showSatelliteLayer && tileUrl) {
-      const overlay = new google.maps.ImageMapType({
-        getTileUrl: (coord, zoom) => {
-          if (coord.x < 0 || coord.y < 0) return "";
-          const maxCoord = 1 << zoom;
-          if (coord.x >= maxCoord || coord.y >= maxCoord) return "";
-          
-          // Earth Engine tile URL format uses {x}, {y}, {z} or uses base URL with query params
-          // Handle both formats
-          let url = tileUrl;
-          if (url.includes("{x}") || url.includes("{y}") || url.includes("{z}")) {
-            url = url
-              .replace(/{x}/g, coord.x.toString())
-              .replace(/{y}/g, coord.y.toString())
-              .replace(/{z}/g, zoom.toString());
-          } else {
-            // If format doesn't have placeholders, assume it's a base URL and append coordinates
-            // This is for Earth Engine's tile_fetcher format which may have a different structure
-            url = `${tileUrl}&x=${coord.x}&y=${coord.y}&z=${zoom}`;
-          }
-          
-          return url;
-        },
-        tileSize: new google.maps.Size(256, 256),
-        maxZoom: 18,
-        minZoom: 0,
-        name: indexType || "Satellite Index",
-        opacity: 0.7, // Semi-transparent so base map shows through
-      });
+  // Manage satellite tile overlays
+  useEffect(() => {
+    if (!map) return;
 
-      map.overlayMapTypes.push(overlay);
-      overlayRef.current = overlay;
+    // Remove all existing overlays
+    while (map.overlayMapTypes.getLength() > 0) {
+      map.overlayMapTypes.removeAt(0);
     }
+    overlaysRef.current.clear();
+
+    // Add overlays for visible indices
+    imageDataList.forEach((imageData) => {
+      if (visibleIndices.has(imageData.indexType) && imageData.tileUrl) {
+        const overlay = new google.maps.ImageMapType({
+          getTileUrl: (coord, zoom) => {
+            if (!imageData.tileUrl || coord.x < 0 || coord.y < 0) return "";
+            const maxCoord = 1 << zoom;
+            if (coord.x >= maxCoord || coord.y >= maxCoord) return "";
+            
+            // Earth Engine tile URL format uses {x}, {y}, {z} or uses base URL with query params
+            let url = imageData.tileUrl;
+            if (url.includes("{x}") || url.includes("{y}") || url.includes("{z}")) {
+              url = url
+                .replace(/{x}/g, coord.x.toString())
+                .replace(/{y}/g, coord.y.toString())
+                .replace(/{z}/g, zoom.toString());
+            } else {
+              url = `${imageData.tileUrl}&x=${coord.x}&y=${coord.y}&z=${zoom}`;
+            }
+            
+            return url;
+          },
+          tileSize: new google.maps.Size(256, 256),
+          maxZoom: 18,
+          minZoom: 0,
+          name: imageData.indexType,
+          opacity: 0.7,
+        });
+
+        map.overlayMapTypes.push(overlay);
+        overlaysRef.current.set(imageData.indexType, overlay);
+      }
+    });
 
     return () => {
-      if (overlayRef.current && map) {
-        try {
-          const index = map.overlayMapTypes.getLength() - 1;
-          if (index >= 0) {
-            map.overlayMapTypes.removeAt(index);
-          }
-        } catch (e) {
-          // Ignore if already removed
+      // Cleanup on unmount
+      if (map) {
+        while (map.overlayMapTypes.getLength() > 0) {
+          map.overlayMapTypes.removeAt(0);
         }
-        overlayRef.current = null;
       }
+      overlaysRef.current.clear();
     };
-  }, [map, tileUrl, showSatelliteLayer, indexType]);
+  }, [map, imageDataList, visibleIndices]);
 
   useEffect(() => {
     if (map && selectedAreaId && areas.length > 0) {
@@ -268,23 +265,27 @@ export default function InteractiveMap({
         )}
       </GoogleMap>
 
-      <div className="absolute top-4 right-4 flex flex-col gap-2">
-        {tileUrl && (
-          <button
-            onClick={() => setShowSatelliteLayer(!showSatelliteLayer)}
-            className={`px-4 py-2 rounded text-sm font-medium ${
-              showSatelliteLayer
-                ? "bg-green-600 text-white"
-                : "bg-white text-gray-700 border border-gray-300"
-            } hover:bg-green-700 transition-colors`}
-          >
-            {showSatelliteLayer ? "Ocultar Índice" : "Mostrar Índice"}
-          </button>
-        )}
+      <div className="absolute top-16 right-4 flex flex-col gap-2">
+        {imageDataList.map((imageData) => {
+          const isVisible = visibleIndices.has(imageData.indexType);
+          return (
+            <button
+              key={imageData.indexType}
+              onClick={() => toggleIndexVisibility(imageData.indexType)}
+              className={`px-4 py-2 rounded text-sm font-medium shadow-lg ${
+                isVisible
+                  ? "bg-green-600 text-white"
+                  : "bg-white text-gray-700 border border-gray-300"
+              } hover:bg-green-700 hover:text-white transition-colors`}
+            >
+              {isVisible ? `Ocultar ${imageData.indexType}` : `Mostrar ${imageData.indexType}`}
+            </button>
+          );
+        })}
         {drawnPolygon && (
           <button
             onClick={clearDrawing}
-            className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 text-sm"
+            className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 text-sm shadow-lg"
           >
             Limpiar dibujo
           </button>
@@ -292,38 +293,36 @@ export default function InteractiveMap({
       </div>
 
       {/* Color Legend */}
-      {showSatelliteLayer && tileUrl && indexType && (
+      {visibleIndices.size > 0 && (
         <div className="absolute bottom-4 left-4 bg-white p-3 rounded-lg shadow-lg border border-gray-200 max-w-xs">
-          <h4 className="text-sm font-semibold text-gray-900 mb-2">{indexType}</h4>
-          <div className="space-y-2">
-            <div className="flex items-center space-x-2">
-              <div
-                className={`h-4 rounded flex-1 ${
-                  indexType === "NDVI" || indexType === "NDRE"
-                    ? "bg-gradient-to-r from-red-500 via-yellow-500 to-green-500"
-                    : "bg-gradient-to-r from-blue-500 via-cyan-500 via-yellow-500 via-orange-500 to-red-500"
-                }`}
-              ></div>
-            </div>
-            <div className="flex justify-between text-xs text-gray-600">
-              <span>{minValue !== undefined ? minValue.toFixed(3) : "Bajo"}</span>
-              <span>{maxValue !== undefined ? maxValue.toFixed(3) : "Alto"}</span>
-            </div>
-            <p className="text-xs text-gray-500 mt-1">
-              {indexType === "NDVI" || indexType === "NDRE" ? (
-                <span>
-                  <span className="text-red-600">Rojo</span> = Bajo |{" "}
-                  <span className="text-yellow-600">Amarillo</span> = Medio |{" "}
-                  <span className="text-green-600">Verde</span> = Alto
-                </span>
-              ) : (
-                <span>
-                  <span className="text-blue-600">Azul</span> = Bajo |{" "}
-                  <span className="text-cyan-600">Cian</span>/<span className="text-yellow-600">Amarillo</span>/
-                  <span className="text-orange-600">Naranja</span> = Medio |{" "}
-                  <span className="text-red-600">Rojo</span> = Alto
-                </span>
-              )}
+          <h4 className="text-sm font-semibold text-gray-900 mb-2">
+            {visibleIndices.size === 1 ? "Índice Visible" : "Índices Visibles"}
+          </h4>
+          <div className="space-y-3">
+            {imageDataList
+              .filter((imageData) => visibleIndices.has(imageData.indexType))
+              .map((imageData) => (
+                <div key={imageData.indexType} className="border-b border-gray-200 last:border-b-0 pb-2 last:pb-0">
+                  <p className="text-xs font-semibold text-gray-800 mb-1">{imageData.indexType}</p>
+                  <div className="flex items-center space-x-2">
+                    <div
+                      className={`h-3 rounded flex-1 ${
+                        imageData.indexType === "NDVI" || imageData.indexType === "NDRE"
+                          ? "bg-gradient-to-r from-red-500 via-yellow-500 to-green-500"
+                          : "bg-gradient-to-r from-blue-500 via-cyan-500 via-yellow-500 via-orange-500 to-red-500"
+                      }`}
+                    ></div>
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-600 mt-1">
+                    <span>{imageData.minValue.toFixed(3)}</span>
+                    <span>{imageData.maxValue.toFixed(3)}</span>
+                  </div>
+                </div>
+              ))}
+            <p className="text-xs text-gray-500 mt-2 pt-2 border-t border-gray-200">
+              <span className="text-red-600">Rojo</span> = Bajo |{" "}
+              <span className="text-yellow-600">Amarillo</span> = Medio |{" "}
+              <span className="text-green-600">Verde</span> = Alto
             </p>
           </div>
         </div>

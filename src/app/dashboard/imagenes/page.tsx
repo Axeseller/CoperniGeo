@@ -18,7 +18,7 @@ export default function ImagenesPage() {
     { lat: number; lng: number }[] | null
   >(null);
   const [loading, setLoading] = useState(false);
-  const [imageData, setImageData] = useState<SatelliteImageResponse | null>(null);
+  const [imageDataList, setImageDataList] = useState<SatelliteImageResponse[]>([]);
 
   const loadAreas = useCallback(async () => {
     if (!user) {
@@ -54,7 +54,6 @@ export default function ImagenesPage() {
     endDate: string;
   }) => {
     setLoading(true);
-    setImageData(null);
 
     try {
       const coordinates = params.coordinates || [];
@@ -94,7 +93,20 @@ export default function ImagenesPage() {
       }
 
       console.log("Imagen cargada exitosamente:", responseData);
-      setImageData(responseData);
+      
+      // Check if this index type already exists, if so replace it
+      setImageDataList((prev) => {
+        const existingIndex = prev.findIndex((img) => img.indexType === responseData.indexType);
+        if (existingIndex !== -1) {
+          // Replace existing
+          const newList = [...prev];
+          newList[existingIndex] = responseData;
+          return newList;
+        } else {
+          // Add new
+          return [...prev, responseData];
+        }
+      });
     } catch (error: any) {
       console.error("Error loading image:", error);
       alert(error.message || "Error al cargar la imagen satelital. Revisa la consola para más detalles.");
@@ -120,10 +132,7 @@ export default function ImagenesPage() {
               areas={areas}
               selectedAreaId={selectedAreaId}
               onAreaSelect={setSelectedAreaId}
-              tileUrl={imageData?.tileUrl}
-              indexType={imageData?.indexType}
-              minValue={imageData?.minValue}
-              maxValue={imageData?.maxValue}
+              imageDataList={imageDataList}
             />
           </div>
 
@@ -138,24 +147,31 @@ export default function ImagenesPage() {
             />
           </div>
 
-          {imageData && (
+          {imageDataList.length > 0 && (
             <div className="bg-white rounded-lg shadow-md p-4">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                Estadísticas de la Imagen
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                Estadísticas de Imágenes
               </h3>
-              <div className="space-y-1 text-sm">
-                <p>
-                  <strong>Valor mínimo:</strong> {imageData.minValue.toFixed(3)}
-                </p>
-                <p>
-                  <strong>Valor máximo:</strong> {imageData.maxValue.toFixed(3)}
-                </p>
-                <p>
-                  <strong>Valor promedio:</strong> {imageData.meanValue.toFixed(3)}
-                </p>
-                <p>
-                  <strong>Fecha:</strong> {new Date(imageData.date).toLocaleDateString("es-MX")}
-                </p>
+              <div className="space-y-4">
+                {imageDataList.map((imageData, index) => (
+                  <div key={index} className="border-b border-gray-200 last:border-b-0 pb-3 last:pb-0">
+                    <h4 className="font-medium text-gray-800 mb-2">{imageData.indexType}</h4>
+                    <div className="space-y-1 text-sm">
+                      <p>
+                        <strong>Valor mínimo:</strong> {imageData.minValue.toFixed(3)}
+                      </p>
+                      <p>
+                        <strong>Valor máximo:</strong> {imageData.maxValue.toFixed(3)}
+                      </p>
+                      <p>
+                        <strong>Valor promedio:</strong> {imageData.meanValue.toFixed(3)}
+                      </p>
+                      <p>
+                        <strong>Fecha:</strong> {new Date(imageData.date).toLocaleDateString("es-MX")}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -169,6 +185,7 @@ export default function ImagenesPage() {
               selectedAreaId={selectedAreaId}
               drawnCoordinates={drawnCoordinates || undefined}
               onCoordinatesClear={handleCoordinatesClear}
+              onAreaCreated={loadAreas}
             />
           </div>
         </div>

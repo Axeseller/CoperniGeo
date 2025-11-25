@@ -1,6 +1,7 @@
 "use client";
 
 import { Area } from "@/types/area";
+import { formatArea } from "@/lib/utils/geometry";
 
 interface AreaListProps {
   areas: Area[];
@@ -44,6 +45,23 @@ export default function AreaList({
               <p className="text-sm text-gray-500">
                 {area.coordinates?.length || 0} puntos
               </p>
+              {area.coordinates && area.coordinates.length >= 3 && (() => {
+                // Normalize coordinates to handle both GeoPoint and plain object formats
+                const normalizedCoords = area.coordinates.map((coord: any) => ({
+                  lat: coord.latitude || coord.lat,
+                  lng: coord.longitude || coord.lng,
+                }));
+                const areaCalculation = formatArea(normalizedCoords);
+                return (
+                  <div className="mt-1 text-xs text-gray-600">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{areaCalculation.km2} km²</span>
+                      <span className="text-gray-400">•</span>
+                      <span className="font-medium">{areaCalculation.hectares} ha</span>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
             <div className="flex space-x-2">
               <button
