@@ -1,5 +1,5 @@
 export type IndexType = "NDVI" | "NDRE" | "EVI";
-export type ReportFrequency = "daily" | "weekly" | "monthly";
+export type ReportFrequency = "3days" | "5days" | "weekly" | "monthly";
 export type ReportStatus = "active" | "paused";
 export type DeliveryMethod = "email" | "whatsapp";
 

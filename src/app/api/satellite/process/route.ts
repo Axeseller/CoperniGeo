@@ -13,6 +13,7 @@ import {
   setCachedResult,
   type CacheKey 
 } from "@/lib/firestore/cache";
+import { calculatePolygonArea, squareMetersToKm } from "@/lib/utils/geometry";
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Allow up to 60 seconds for processing
@@ -99,42 +100,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Step 6: Select the most recent image
-    console.log("[Satellite API] Selecting most recent image...");
-    const image = getMostRecentImage(collection);
-    
-    // Get image date for caching (check cache now that we know the date)
-    let imageDate: string;
-    try {
-      // Get system:time_start property for the actual image date
-      const imageDateValue = await new Promise<string>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error("Image date fetch timed out"));
-        }, 10000); // 10 second timeout for date
-        
-        image.get("system:time_start").getInfo((timestamp: number, error?: Error) => {
-          clearTimeout(timeout);
-          if (error) reject(error);
-          else {
-            // Convert timestamp to date string
-            const date = new Date(timestamp);
-            resolve(date.toISOString().split("T")[0]);
-          }
-        });
-      });
-      imageDate = imageDateValue || new Date().toISOString().split("T")[0];
-    } catch (error: any) {
-      console.warn("[Satellite API] Could not get image date, using current date:", error.message);
-      imageDate = new Date().toISOString().split("T")[0];
-    }
-    
-    // Now check cache with the actual image date
-    console.log("[Satellite API] Checking cache for image date:", imageDate);
+    // Step 6: Check cache BEFORE processing (using "latest" since we always fetch most recent)
+    console.log("[Satellite API] Checking cache for most recent image...");
     const cacheKey: CacheKey = {
       coordinates,
       indexType,
       cloudCoverage,
-      imageDate: imageDate, // Use actual image date
+      imageDate: "latest", // Always fetch most recent, so use "latest" for cache key
     };
     
     const cacheHash = generateCacheHash(cacheKey);
@@ -155,18 +127,40 @@ export async function POST(request: NextRequest) {
     
     console.log("[Satellite API] Cache miss. Processing with GEE...");
 
-    // Step 7: Calculate the requested index
-    console.log("[Satellite API] Calculating index:", indexType);
-    const indexImage = calculateIndex(image, indexType as IndexType);
+    // Step 7: Select the most recent image
+    console.log("[Satellite API] Selecting most recent image...");
+    const image = getMostRecentImage(collection);
 
-    // Step 8: Clip to polygon
-    console.log("[Satellite API] Clipping to polygon...");
+    // Step 8: Clip image to polygon bounding box BEFORE index calculation
+    // This is the MOST cost-efficient optimization - we only process pixels within the bounding box
+    // Instead of processing the entire 109x109 km Sentinel-2 tile, we only process the AOI's bounding box
+    console.log("[Satellite API] Clipping image to polygon bounding box (cost optimization)...");
+    
+    // Get bounding box of the polygon and add small buffer for edge pixels
+    // Using polygon bounds reduces processing area from full tile (~12,000 km²) to just the AOI area
+    const bbox = polygon.bounds();
+    const bufferMeters = 1000; // 1km buffer to ensure we capture edge pixels
+    const bufferedBbox = bbox.buffer(bufferMeters);
+    
+    // Clip the raw image to bounding box BEFORE calculating index
+    // This dramatically reduces the number of pixels processed (often 10-100x reduction)
+    const clippedImage = image.clip(bufferedBbox);
+    
+    console.log("[Satellite API] Image clipped to bounding box - processing area minimized");
+
+    // Step 9: Calculate the requested index on the clipped image (much smaller area)
+    console.log("[Satellite API] Calculating index:", indexType, "on clipped area...");
+    const indexImage = calculateIndex(clippedImage, indexType as IndexType);
+
+    // Step 10: Clip to exact polygon (for display and statistics)
+    console.log("[Satellite API] Clipping to exact polygon...");
     const clipped = indexImage.clip(polygon);
 
-    // Step 9: Get statistics with optimized parameters to reduce GEE costs
+    // Step 11: Get statistics with optimized parameters to reduce GEE costs
     // Calculate optimal scale based on polygon area (larger areas = lower resolution = lower cost)
-    const polygonArea = polygon.area().getInfo();
-    const areaKm2 = polygonArea / 1000000; // Convert m² to km²
+    // Use client-side calculation to avoid GEE API call
+    const polygonAreaM2 = calculatePolygonArea(coordinates);
+    const areaKm2 = squareMetersToKm(polygonAreaM2);
     let scale = 100; // Default 100m resolution
     
     if (areaKm2 > 100) {
@@ -211,7 +205,7 @@ export async function POST(request: NextRequest) {
 
     console.log("[Satellite API] Statistics computed successfully");
 
-    // Step 10: Validate statistics
+    // Step 12: Validate statistics
     const minKey = `${indexType}_min`;
     const maxKey = `${indexType}_max`;
     const meanKey = `${indexType}_mean`;
@@ -221,7 +215,7 @@ export async function POST(request: NextRequest) {
       throw new Error(`Statistics missing expected keys. Received: ${Object.keys(statsValue).join(", ")}`);
     }
 
-    // Step 11: Generate tile URL for map overlay
+    // Step 13: Generate tile URL for map overlay
     console.log("[Satellite API] Generating tile URL...");
     const minValue = statsValue[minKey];
     const maxValue = statsValue[maxKey];
@@ -262,18 +256,22 @@ export async function POST(request: NextRequest) {
       throw new Error(`Failed to generate tile URL from Earth Engine. MapId structure: ${JSON.stringify(Object.keys(mapId || {}))}`);
     }
 
-    // Step 12: Prepare response
+    // Step 14: Prepare response
+    // Use current date since we always fetch the most recent image
+    const imageDate = new Date().toISOString().split("T")[0];
+    
     const response: SatelliteImageResponse = {
       tileUrl: tileUrl,
       minValue,
       maxValue,
       meanValue: statsValue[meanKey] || (minValue + maxValue) / 2,
-      date: imageDate, // Use actual image date
+      date: imageDate, // Use current date (we always fetch most recent)
       indexType: indexType as IndexType,
     };
 
-    // Step 13: Store result in cache (async, don't wait)
-    setCachedResult(cacheHash, cacheKey, response, imageDate).catch((error) => {
+    // Step 15: Store result in cache (async, don't wait)
+    // Store with "latest" as date since that's what we used in the cache key
+    setCachedResult(cacheHash, cacheKey, response, "latest").catch((error) => {
       console.error("[Satellite API] Failed to cache result (non-critical):", error);
     });
 

@@ -42,6 +42,9 @@ declare module "@google/earthengine" {
 
   export interface Geometry {
     getInfo(callback: (value: any, error?: Error) => void): void;
+    bounds(): Geometry;
+    buffer(distance: number, projection?: any): Geometry;
+    area(): ComputedObject;
   }
 
   export interface Reducer {

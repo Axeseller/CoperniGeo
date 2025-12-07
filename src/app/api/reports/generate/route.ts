@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDueReports, markReportGenerated } from "@/lib/firestore/reports";
 import { getArea } from "@/lib/firestore/areas";
 import { initializeEarthEngine, getEarthEngine } from "@/lib/earthEngine";
-import { calculateIndex, getSentinel2Collection } from "@/lib/indices/calculations";
+import { calculateIndex, getSentinel2Collection, getMostRecentImage } from "@/lib/indices/calculations";
 import { uploadFile } from "@/lib/storage/upload";
 import { sendEmail } from "@/lib/email/resend";
-import { IndexType } from "@/types/report";
+import { generateReportPDF } from "@/lib/pdf/generateReportPDF";
+import { IndexType, ReportFrequency } from "@/types/report";
+import { getFrequencyLabel } from "@/lib/utils/reports";
 
 export const dynamic = 'force-dynamic';
 
@@ -43,12 +45,8 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        // Calculate date range (last 30 days)
-        const endDate = new Date();
-        const startDate = new Date();
-        startDate.setDate(startDate.getDate() - 30);
-
         // Process each index for each area
+        // Note: We now always fetch the most recent data (last 60 days)
         const imageData: Array<{
           areaName: string;
           indexType: IndexType;
@@ -72,13 +70,14 @@ export async function POST(request: NextRequest) {
 
           // Process each requested index
           for (const indexType of report.indices) {
-            const collection = getSentinel2Collection(
-              startDate.toISOString().split("T")[0],
-              endDate.toISOString().split("T")[0],
-              report.cloudCoverage
-            );
+            // Get Sentinel-2 collection (automatically uses last 60 days, most recent data)
+            const collection = getSentinel2Collection(report.cloudCoverage)
+              .filterBounds(polygon); // Filter by polygon early to reduce processing
 
-            const image = collection.sort("system:time_start", false).first();
+            // Select the most recent image
+            const image = getMostRecentImage(collection);
+            
+            // Calculate index and clip to polygon
             const indexImage = calculateIndex(image, indexType);
             const clipped = indexImage.clip(polygon);
 
@@ -126,12 +125,30 @@ export async function POST(request: NextRequest) {
         // Generate email content
         const emailHtml = generateReportEmail(report, imageData);
 
-        // Send email
+        // Generate PDF
+        console.log(`[Report Generate] Generating PDF for report ${report.id}...`);
+        const pdfBuffer = await generateReportPDF(report, imageData.map((data) => ({
+          areaName: data.areaName,
+          indexType: data.indexType,
+          imageUrl: data.imageUrl,
+          stats: data.stats,
+        })));
+
+        // Send email with PDF attachment
+        const reportDate = new Date().toLocaleDateString("es-MX");
         await sendEmail(
           report.email,
-          `Reporte de Monitoreo - ${new Date().toLocaleDateString("es-MX")}`,
-          emailHtml
+          `Reporte de Monitoreo - ${reportDate}`,
+          emailHtml,
+          undefined,
+          [{
+            filename: `reporte-copernigeo-${reportDate.replace(/\//g, "-")}.pdf`,
+            content: pdfBuffer,
+            contentType: "application/pdf",
+          }]
         );
+        
+        console.log(`[Report Generate] PDF generated and email sent for report ${report.id}`);
 
         // Mark report as generated
         await markReportGenerated(report.id!);
@@ -203,7 +220,7 @@ function generateReportEmail(
           
           <h2>Configuración del Reporte</h2>
           <ul>
-            <li><strong>Frecuencia:</strong> ${report.frequency === "daily" ? "Diario" : report.frequency === "weekly" ? "Semanal" : "Mensual"}</li>
+            <li><strong>Frecuencia:</strong> ${getFrequencyLabel(report.frequency)}</li>
             <li><strong>Índices:</strong> ${report.indices.join(", ")}</li>
             <li><strong>Cobertura de nubes:</strong> ${report.cloudCoverage}%</li>
           </ul>
@@ -211,11 +228,15 @@ function generateReportEmail(
           <h2>Resultados</h2>
           ${imagesHtml}
 
-          <a href="https://copernigeo.com/dashboard/imagenes" class="button">Ver en Dashboard</a>
-          
-          <p style="margin-top: 30px; font-size: 12px; color: #666;">
-            Este es un reporte automático de CoperniGeo. Para modificar la configuración, visita tu dashboard.
-          </p>
+                  <a href="https://copernigeo.com/dashboard/imagenes" class="button">Ver en Dashboard</a>
+                  
+                  <p style="margin-top: 20px; padding: 15px; background-color: #e0f2fe; border-left: 4px solid #0284c7; border-radius: 4px;">
+                    <strong>📎 PDF Adjunto:</strong> Este reporte incluye un PDF detallado con todos los resultados y estadísticas adjunto a este correo.
+                  </p>
+                  
+                  <p style="margin-top: 30px; font-size: 12px; color: #666;">
+                    Este es un reporte automático de CoperniGeo. Para modificar la configuración, visita tu dashboard.
+                  </p>
         </div>
       </div>
     </body>

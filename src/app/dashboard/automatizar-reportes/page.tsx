@@ -31,9 +31,13 @@ export default function AutomatizarReportesPage() {
     loadReports();
   }, [loadReports]);
 
-  const handleSave = () => {
-    setShowForm(false);
-    setEditingReport(null);
+  const handleSave = (reportId?: string) => {
+    // Don't close the form immediately if reportId is provided
+    // This allows the user to see the "send now" button
+    if (!reportId) {
+      setShowForm(false);
+      setEditingReport(null);
+    }
     loadReports();
   };
 

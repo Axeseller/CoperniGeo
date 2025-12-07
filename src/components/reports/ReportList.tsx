@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { Report } from "@/types/report";
 import { updateReport, deleteReport } from "@/lib/firestore/reports";
+import { getFrequencyLabel } from "@/lib/utils/reports";
 
 interface ReportListProps {
   reports: Report[];
@@ -10,6 +12,8 @@ interface ReportListProps {
 }
 
 export default function ReportList({ reports, onUpdate, onEdit }: ReportListProps) {
+  const [sendingReports, setSendingReports] = useState<Set<string>>(new Set());
+
   const handleToggleStatus = async (report: Report) => {
     if (!report.id) return;
     const newStatus = report.status === "active" ? "paused" : "active";
@@ -21,6 +25,35 @@ export default function ReportList({ reports, onUpdate, onEdit }: ReportListProp
     if (confirm("¿Estás seguro de eliminar este reporte?")) {
       await deleteReport(reportId);
       onUpdate();
+    }
+  };
+
+  const handleSendNow = async (report: Report) => {
+    if (!report.id) return;
+
+    setSendingReports((prev) => new Set(prev).add(report.id!));
+
+    try {
+      const response = await fetch(`/api/reports/${report.id}/send`, {
+        method: "POST",
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Error al enviar el reporte");
+      }
+
+      alert("¡Reporte enviado exitosamente!");
+      onUpdate(); // Refresh the list to update lastGenerated date
+    } catch (error: any) {
+      alert(`Error al enviar el reporte: ${error.message}`);
+    } finally {
+      setSendingReports((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(report.id!);
+        return newSet;
+      });
     }
   };
 
@@ -43,7 +76,7 @@ export default function ReportList({ reports, onUpdate, onEdit }: ReportListProp
           <div className="flex justify-between items-start mb-2">
             <div>
               <h4 className="font-medium text-gray-900">
-                Reporte {report.frequency === "daily" ? "Diario" : report.frequency === "weekly" ? "Semanal" : "Mensual"}
+                Reporte {getFrequencyLabel(report.frequency)}
               </h4>
               <p className="text-sm text-gray-500">{report.email}</p>
             </div>
@@ -82,29 +115,40 @@ export default function ReportList({ reports, onUpdate, onEdit }: ReportListProp
             )}
           </div>
 
-          <div className="flex space-x-2">
+          <div className="space-y-2">
             <button
-              onClick={() => handleToggleStatus(report)}
-              className={`flex-1 px-3 py-2 text-sm rounded ${
-                report.status === "active"
-                  ? "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
-                  : "bg-green-100 text-green-800 hover:bg-green-200"
-              }`}
+              onClick={() => handleSendNow(report)}
+              disabled={sendingReports.has(report.id || "")}
+              className="w-full px-3 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {report.status === "active" ? "Pausar" : "Activar"}
+              {sendingReports.has(report.id || "") 
+                ? "Enviando reporte..." 
+                : "Enviar reporte con datos actuales ahora"}
             </button>
-            <button
-              onClick={() => onEdit(report)}
-              className="flex-1 px-3 py-2 text-sm bg-blue-100 text-blue-800 rounded hover:bg-blue-200"
-            >
-              Editar
-            </button>
-            <button
-              onClick={() => report.id && handleDelete(report.id)}
-              className="flex-1 px-3 py-2 text-sm bg-red-100 text-red-800 rounded hover:bg-red-200"
-            >
-              Eliminar
-            </button>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => handleToggleStatus(report)}
+                className={`flex-1 px-3 py-2 text-sm rounded ${
+                  report.status === "active"
+                    ? "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
+                    : "bg-green-100 text-green-800 hover:bg-green-200"
+                }`}
+              >
+                {report.status === "active" ? "Pausar" : "Activar"}
+              </button>
+              <button
+                onClick={() => onEdit(report)}
+                className="flex-1 px-3 py-2 text-sm bg-blue-100 text-blue-800 rounded hover:bg-blue-200"
+              >
+                Editar
+              </button>
+              <button
+                onClick={() => report.id && handleDelete(report.id)}
+                className="flex-1 px-3 py-2 text-sm bg-red-100 text-red-800 rounded hover:bg-red-200"
+              >
+                Eliminar
+              </button>
+            </div>
           </div>
         </div>
       ))}

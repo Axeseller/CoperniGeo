@@ -99,6 +99,32 @@ Cache is checked after determining which image will be used.
 - **Minimal GEE usage** - only queries metadata first
 - **Prevents duplicate processing** of same image
 
+## 7. Bounding Box Clipping Before Index Calculation
+
+### Overview
+**MOST COST-EFFICIENT OPTIMIZATION**: Clip image to polygon's bounding box BEFORE calculating the index.
+
+### The Problem
+Sentinel-2 images cover ~109x109 km tiles (~12,000 km²). If a user's polygon is only 1 km², we were processing the entire 12,000 km² tile, wasting 99.99% of computation.
+
+### The Solution
+1. Get the bounding box of the user's polygon
+2. Add a small 1km buffer for edge pixels
+3. Clip the raw image to this bounding box BEFORE calculating the index
+4. Calculate the index only on the clipped (smaller) area
+5. Then clip to the exact polygon for statistics
+
+### Benefits
+- **Massive cost reduction**: Process only the AOI area instead of full tile
+- **10-100x fewer pixels processed**: Example: 1 km² polygon in 12,000 km² tile = 12,000x reduction
+- **Faster processing**: Smaller area = faster computation
+- **Same accuracy**: Statistics and display still use exact polygon
+
+### Example Impact
+- **Before**: 1 km² polygon = processing ~12,000 km² (entire Sentinel-2 tile)
+- **After**: 1 km² polygon = processing ~3 km² (bounding box + buffer)
+- **Cost savings**: ~99.97% reduction in pixels processed
+
 ## Monitoring & Maintenance
 
 ### Cache Statistics

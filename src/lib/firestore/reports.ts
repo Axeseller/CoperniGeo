@@ -23,8 +23,11 @@ function calculateNextRun(frequency: ReportFrequency, lastRun?: Date): Date {
   const next = new Date(now);
   
   switch (frequency) {
-    case "daily":
-      next.setDate(next.getDate() + 1);
+    case "3days":
+      next.setDate(next.getDate() + 3);
+      break;
+    case "5days":
+      next.setDate(next.getDate() + 5);
       break;
     case "weekly":
       next.setDate(next.getDate() + 7);
