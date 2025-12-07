@@ -4,8 +4,7 @@ export interface SatelliteImageRequest {
   coordinates: { lat: number; lng: number }[];
   indexType: IndexType;
   cloudCoverage: number; // 0-100
-  startDate: string; // ISO date string
-  endDate: string; // ISO date string
+  // Date parameters removed - always fetch most recent data
 }
 
 export interface SatelliteImageResponse {

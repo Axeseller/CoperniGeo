@@ -10,8 +10,6 @@ interface MapControlsProps {
     coordinates?: { lat: number; lng: number }[];
     indexType: IndexType;
     cloudCoverage: number;
-    startDate: string;
-    endDate: string;
   }) => void;
   areas: Area[];
   selectedAreaId?: string;
@@ -30,10 +28,6 @@ export default function MapControls({
 }: MapControlsProps) {
   const [indexType, setIndexType] = useState<IndexType>("NDVI");
   const [cloudCoverage, setCloudCoverage] = useState(20);
-  const [startDate, setStartDate] = useState(
-    new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
-  );
-  const [endDate, setEndDate] = useState(new Date().toISOString().split("T")[0]);
 
   const handleLoadImage = () => {
     // Use drawn coordinates if available, otherwise use selected area
@@ -59,8 +53,6 @@ export default function MapControls({
       coordinates,
       indexType,
       cloudCoverage,
-      startDate,
-      endDate,
     });
   };
 
@@ -115,36 +107,12 @@ export default function MapControls({
         />
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Fecha inicio
-        </label>
-        <input
-          type="date"
-          value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Fecha fin
-        </label>
-        <input
-          type="date"
-          value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
-        />
-      </div>
-
       <button
         onClick={handleLoadImage}
         disabled={loading || (!selectedAreaId && (!drawnCoordinates || drawnCoordinates.length < 3))}
         className="w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {loading ? "Cargando..." : "Cargar Imagen"}
+        {loading ? "Cargando..." : "Cargar Imagen Más Reciente"}
       </button>
       
       {!selectedAreaId && drawnCoordinates && drawnCoordinates.length >= 3 && (
@@ -152,6 +120,9 @@ export default function MapControls({
           Usando polígono dibujado ({drawnCoordinates.length} puntos)
         </p>
       )}
+      <p className="text-xs text-gray-500 text-center mt-2">
+        Se cargará la imagen más reciente disponible
+      </p>
     </div>
   );
 }

@@ -51,6 +51,16 @@ service cloud.firestore {
       allow delete: if isOwner(resource.data.userId);
     }
     
+    // Satellite cache collection (shared cache for all authenticated users)
+    // This cache reduces GEE costs by storing processed satellite image results
+    match /satellite_cache/{cacheHash} {
+      // Allow read by any authenticated user (cache is shared to benefit everyone)
+      allow read: if isAuthenticated();
+      
+      // Allow write by any authenticated user (API routes will write here)
+      allow write: if isAuthenticated();
+    }
+    
     // Deny all other access
     match /{document=**} {
       allow read, write: if false;

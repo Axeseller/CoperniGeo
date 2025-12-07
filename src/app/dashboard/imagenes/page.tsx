@@ -50,8 +50,6 @@ export default function ImagenesPage() {
     coordinates?: { lat: number; lng: number }[];
     indexType: IndexType;
     cloudCoverage: number;
-    startDate: string;
-    endDate: string;
   }) => {
     setLoading(true);
 
@@ -63,12 +61,10 @@ export default function ImagenesPage() {
         return;
       }
 
-      console.log("Cargando imagen satelital con parámetros:", {
+      console.log("Cargando imagen satelital más reciente con parámetros:", {
         coordinates: coordinates.length,
         indexType: params.indexType,
         cloudCoverage: params.cloudCoverage,
-        startDate: params.startDate,
-        endDate: params.endDate,
       });
 
       const response = await fetch("/api/satellite/process", {
@@ -80,8 +76,6 @@ export default function ImagenesPage() {
           coordinates,
           indexType: params.indexType,
           cloudCoverage: params.cloudCoverage,
-          startDate: params.startDate,
-          endDate: params.endDate,
         }),
       });
 

@@ -55,17 +55,24 @@ export function calculateIndex(image: ee.Image, indexType: IndexType): ee.Image 
 
 /**
  * Get Sentinel-2 collection with cloud masking and filtering
+ * Fetches the most recent data (last 60 days) to reduce GEE costs
+ * Sentinel-2 revisits every 5 days, so 60 days gives plenty of coverage
  */
-export function getSentinel2Collection(
-  startDate: string,
-  endDate: string,
-  cloudCoverage: number
-): ee.ImageCollection {
+export function getSentinel2Collection(cloudCoverage: number): ee.ImageCollection {
+  // Reduced to 60 days to minimize collection size and reduce GEE costs
+  // Sentinel-2 revisits every 5 days, so 60 days provides 12+ revisits
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - 60); // Look back 60 days (reduced from 90)
+  
+  const startDateStr = startDate.toISOString().split("T")[0];
+  const endDateStr = endDate.toISOString().split("T")[0];
+  
   const collection = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
-    .filterDate(startDate, endDate)
+    .filterDate(startDateStr, endDateStr)
     .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", cloudCoverage));
 
-  // Apply cloud masking
+  // Apply cloud masking for better quality
   return collection.map((image: ee.Image) => {
     const cloudMask = image.select("QA60");
     const clouds = cloudMask.bitwiseAnd(1024).or(cloudMask.bitwiseAnd(2048));
@@ -73,3 +80,9 @@ export function getSentinel2Collection(
   });
 }
 
+/**
+ * Get the most recent image from a collection
+ */
+export function getMostRecentImage(collection: ee.ImageCollection): ee.Image {
+  return collection.sort("system:time_start", false).first();
+}
