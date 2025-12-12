@@ -94,70 +94,70 @@ export default function IniciaSesionPage() {
       {/* Main Content */}
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full space-y-8">
-          <div>
+        <div>
             <h2 className="text-center text-4xl font-bold text-[#242424] mb-2">
-              Inicia sesión
-            </h2>
+            Inicia sesión
+          </h2>
             <p className="mt-2 text-center text-sm text-[#898989]">
-              O{" "}
-              <Link
-                href="/registrarte"
+            O{" "}
+            <Link
+              href="/registrarte"
                 className="font-medium text-[#5db815] hover:text-[#5db815] transition-colors"
-              >
-                crea una cuenta nueva
-              </Link>
-            </p>
-          </div>
+            >
+              crea una cuenta nueva
+            </Link>
+          </p>
+        </div>
           <div className="bg-white rounded-2xl p-8 border border-gray-200 shadow-lg">
             <form className="space-y-6" onSubmit={handleSubmit}>
-              {error && (
+          {error && (
                 <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-                  {error}
-                </div>
-              )}
+              {error}
+            </div>
+          )}
               <div className="space-y-5">
-                <div>
+            <div>
                   <label htmlFor="email" className="block text-sm font-medium text-[#242424] mb-2">
-                    Email
-                  </label>
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                Email
+              </label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                     className="w-full px-4 py-3 bg-gray-50 border border-gray-300 text-[#242424] placeholder-gray-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5db815] focus:border-transparent transition-colors"
-                    placeholder="tu@email.com"
-                  />
-                </div>
-                <div>
+                placeholder="tu@email.com"
+              />
+            </div>
+            <div>
                   <label htmlFor="password" className="block text-sm font-medium text-[#242424] mb-2">
-                    Contraseña
-                  </label>
-                  <input
-                    id="password"
-                    name="password"
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                Contraseña
+              </label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                     className="w-full px-4 py-3 bg-gray-50 border border-gray-300 text-[#242424] placeholder-gray-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5db815] focus:border-transparent transition-colors"
-                    placeholder="Tu contraseña"
-                  />
-                </div>
-              </div>
+                placeholder="Tu contraseña"
+              />
+            </div>
+          </div>
 
-              <div>
-                <button
-                  type="submit"
-                  disabled={loading}
+          <div>
+            <button
+              type="submit"
+              disabled={loading}
                   className="w-full flex justify-center py-3 px-4 border border-transparent text-base font-semibold rounded-lg text-white bg-[#5db815] hover:bg-[#4a9a11] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#5db815] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {loading ? "Iniciando sesión..." : "Iniciar sesión"}
-                </button>
-              </div>
-            </form>
+            >
+              {loading ? "Iniciando sesión..." : "Iniciar sesión"}
+            </button>
+          </div>
+        </form>
           </div>
         </div>
       </div>

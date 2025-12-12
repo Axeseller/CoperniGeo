@@ -118,99 +118,99 @@ export default function RegistrartePage() {
       {/* Main Content */}
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full space-y-8">
-          <div>
+        <div>
             <h2 className="text-center text-4xl font-bold text-[#242424] mb-2">
-              Crear cuenta
-            </h2>
+            Crear cuenta
+          </h2>
             <p className="mt-2 text-center text-sm text-[#898989]">
-              O{" "}
-              <Link
-                href="/inicia-sesion"
+            O{" "}
+            <Link
+              href="/inicia-sesion"
                 className="font-medium text-[#5db815] hover:text-[#5db815] transition-colors"
-              >
-                inicia sesión si ya tienes cuenta
-              </Link>
-            </p>
-          </div>
+            >
+              inicia sesión si ya tienes cuenta
+            </Link>
+          </p>
+        </div>
           <div className="bg-white rounded-2xl p-8 border border-gray-200 shadow-lg">
             <form className="space-y-6" onSubmit={handleSubmit}>
-              {error && (
+          {error && (
                 <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-                  {error}
-                </div>
-              )}
+              {error}
+            </div>
+          )}
               <div className="space-y-5">
-                <div>
+            <div>
                   <label htmlFor="nombre" className="block text-sm font-medium text-[#242424] mb-2">
-                    Nombre (opcional)
-                  </label>
-                  <input
-                    id="nombre"
-                    name="nombre"
-                    type="text"
-                    value={nombre}
-                    onChange={(e) => setNombre(e.target.value)}
+                Nombre (opcional)
+              </label>
+              <input
+                id="nombre"
+                name="nombre"
+                type="text"
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
                     className="w-full px-4 py-3 bg-gray-50 border border-gray-300 text-[#242424] placeholder-gray-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5db815] focus:border-transparent transition-colors"
-                    placeholder="Tu nombre"
-                  />
-                </div>
-                <div>
+                placeholder="Tu nombre"
+              />
+            </div>
+            <div>
                   <label htmlFor="email" className="block text-sm font-medium text-[#242424] mb-2">
-                    Email *
-                  </label>
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                Email *
+              </label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                     className="w-full px-4 py-3 bg-gray-50 border border-gray-300 text-[#242424] placeholder-gray-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5db815] focus:border-transparent transition-colors"
-                    placeholder="tu@email.com"
-                  />
-                </div>
-                <div>
+                placeholder="tu@email.com"
+              />
+            </div>
+            <div>
                   <label htmlFor="password" className="block text-sm font-medium text-[#242424] mb-2">
-                    Contraseña *
-                  </label>
-                  <input
-                    id="password"
-                    name="password"
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                Contraseña *
+              </label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                     className="w-full px-4 py-3 bg-gray-50 border border-gray-300 text-[#242424] placeholder-gray-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5db815] focus:border-transparent transition-colors"
-                    placeholder="Mínimo 8 caracteres"
-                  />
-                </div>
-                <div>
+                placeholder="Mínimo 8 caracteres"
+              />
+            </div>
+            <div>
                   <label htmlFor="confirmPassword" className="block text-sm font-medium text-[#242424] mb-2">
-                    Confirmar contraseña *
-                  </label>
-                  <input
-                    id="confirmPassword"
-                    name="confirmPassword"
-                    type="password"
-                    required
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
+                Confirmar contraseña *
+              </label>
+              <input
+                id="confirmPassword"
+                name="confirmPassword"
+                type="password"
+                required
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
                     className="w-full px-4 py-3 bg-gray-50 border border-gray-300 text-[#242424] placeholder-gray-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5db815] focus:border-transparent transition-colors"
-                    placeholder="Confirma tu contraseña"
-                  />
-                </div>
-              </div>
+                placeholder="Confirma tu contraseña"
+              />
+            </div>
+          </div>
 
-              <div>
-                <button
-                  type="submit"
-                  disabled={loading}
+          <div>
+            <button
+              type="submit"
+              disabled={loading}
                   className="w-full flex justify-center py-3 px-4 border border-transparent text-base font-semibold rounded-lg text-white bg-[#5db815] hover:bg-[#4a9a11] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#5db815] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {loading ? "Creando cuenta..." : "Registrarte"}
-                </button>
-              </div>
-            </form>
+            >
+              {loading ? "Creando cuenta..." : "Registrarte"}
+            </button>
+          </div>
+        </form>
           </div>
         </div>
       </div>

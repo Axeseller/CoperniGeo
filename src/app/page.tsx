@@ -20,6 +20,7 @@ interface Feature {
 
 export default function Home() {
   const [selectedFeature, setSelectedFeature] = useState<FeatureType>(null);
+  const [isScrolled, setIsScrolled] = useState(false);
 
   // Prevent body scroll when modal is open
   useEffect(() => {
@@ -34,6 +35,16 @@ export default function Home() {
       document.body.style.overflow = 'unset';
     };
   }, [selectedFeature]);
+
+  // Handle scroll for navbar styling
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 10);
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const features: Feature[] = [
     {
@@ -180,9 +191,16 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-[#f4f3f4] overflow-x-hidden">
       {/* Navigation Bar */}
-      <nav className="bg-[#f4f3f4] border-b border-gray-300">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
+      <nav className={`fixed top-0 left-0 right-0 z-50 ${
+        isScrolled ? 'pt-2' : ''
+      }`}>
+        <div className={`max-w-7xl mx-auto ${
+          isScrolled 
+            ? 'bg-white border border-gray-200 shadow-sm rounded-lg' 
+            : 'bg-[#f4f3f4] border-b border-gray-300'
+        }`}>
+          <div className="px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-8">
               <h1 className="text-2xl font-bold text-[#5db815]">CoperniGeo</h1>
               <div className="hidden md:flex space-x-6">
@@ -218,11 +236,12 @@ export default function Home() {
               </Link>
             </div>
           </div>
+          </div>
         </div>
       </nav>
 
       {/* Hero Section */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-32">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-32 pb-32">
         <div className="text-center">
           <h1 className="text-6xl font-bold text-[#242424] sm:text-7xl mb-6">
             CoperniGeo es una herramienta diseñada para monitorear y optimizar cultivos.
@@ -233,106 +252,238 @@ export default function Home() {
           <div className="mt-10 flex justify-center items-center space-x-4">
             <Link
               href="/registrarte"
-              className="bg-white text-gray-900 px-8 py-3 rounded-lg text-lg font-semibold hover:bg-gray-100 transition-colors"
+              className="bg-white text-[#242424] px-8 py-3 rounded-lg text-lg font-semibold hover:bg-gray-100 transition-colors"
             >
-              Comenzar
+              Comenzar Gratis
             </Link>
             <Link
               href="/inicia-sesion"
-              className="text-[#121212] px-8 py-3 rounded-lg text-lg font-semibold hover:text-[#5db815] transition-colors"
+              className="text-[#242424] px-8 py-3 rounded-lg text-lg font-semibold hover:text-[#5db815] transition-colors"
             >
-              Inicia sesión →
+              Inicia sesión
             </Link>
           </div>
         </div>
 
         {/* Dashboard Preview */}
-        <div className="mt-24 relative">
-          <div className="bg-gray-800 rounded-lg shadow-2xl overflow-hidden border border-gray-700 transform rotate-[-1deg]">
-            {/* Mock Dashboard Header */}
-            <div className="bg-gray-800 border-b border-gray-700 px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-                <div className="w-3 h-3 rounded-full bg-[#5db815]"></div>
-              </div>
-              <div className="text-gray-400 text-sm">copernigeo.com/dashboard</div>
-            </div>
-
-            {/* Mock Dashboard Content */}
-            <div className="flex">
-              {/* Sidebar */}
-              <div className="w-64 bg-gray-900 border-r border-gray-700 p-6">
-                <h2 className="text-xl font-bold text-[#5db815] mb-6">CoperniGeo</h2>
-                <nav className="space-y-2">
-                  <div className="px-4 py-2 text-[#5db815] bg-[#5db815]/10 rounded-md text-sm font-medium">
-                    Inicio
-                  </div>
-                  <div className="px-4 py-2 text-gray-400 hover:text-[#5db815] rounded-md text-sm font-medium cursor-pointer">
-                    Imágenes
-                  </div>
-                  <div className="px-4 py-2 text-gray-400 hover:text-[#5db815] rounded-md text-sm font-medium cursor-pointer">
-                    Automatizar reportes
-                  </div>
-                  <div className="px-4 py-2 text-gray-400 hover:text-[#5db815] rounded-md text-sm font-medium cursor-pointer">
-                    Planes
-                  </div>
-                  <div className="px-4 py-2 text-gray-400 hover:text-[#5db815] rounded-md text-sm font-medium cursor-pointer">
-                    Cuenta
-                  </div>
-                </nav>
+        <div className="mt-24 flex justify-center items-center gap-8 max-w-7xl mx-auto" style={{ perspective: '1000px' }}>
+          {/* Left Dashboard Preview */}
+          <div className="flex-1 max-w-[48%]" style={{ perspective: '1000px' }}>
+            <div className="bg-gray-800 rounded-lg shadow-2xl overflow-hidden border border-gray-700" style={{ 
+              transform: 'perspective(1000px) rotateY(6deg) rotateX(0deg) scale(1.02)',
+              transformStyle: 'preserve-3d'
+            }}>
+              {/* Mock Dashboard Header */}
+              <div className="bg-gray-800 border-b border-gray-700 px-4 py-3 flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-2.5 h-2.5 rounded-full bg-red-500"></div>
+                  <div className="w-2.5 h-2.5 rounded-full bg-yellow-500"></div>
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#5db815]"></div>
+                </div>
+                <div className="text-gray-400 text-xs">copernigeo.com/dashboard</div>
               </div>
 
-              {/* Main Content Area */}
-              <div className="flex-1 bg-gray-50 p-8">
-                <div className="mb-6">
-                  <h3 className="text-2xl font-bold text-gray-900 mb-2">
-                    Bienvenido a CoperniGeo
-                  </h3>
-                  <p className="text-gray-600">
-                    Monitorea tus cultivos mediante imágenes satelitales
-                  </p>
+              {/* Mock Dashboard Content */}
+              <div className="flex">
+                {/* Sidebar */}
+                <div className="w-48 bg-gray-900 border-r border-gray-700 p-4">
+                  <h2 className="text-lg font-bold text-[#5db815] mb-4">CoperniGeo</h2>
+                  <nav className="space-y-1.5">
+                    <div className="px-3 py-1.5 text-[#5db815] bg-[#5db815]/10 rounded-md text-xs font-medium">
+                      Inicio
+                    </div>
+                    <div className="px-3 py-1.5 text-gray-400 hover:text-[#5db815] rounded-md text-xs font-medium cursor-pointer">
+                      Imágenes
+                    </div>
+                    <div className="px-3 py-1.5 text-gray-400 hover:text-[#5db815] rounded-md text-xs font-medium cursor-pointer">
+                      Automatizar reportes
+                    </div>
+                    <div className="px-3 py-1.5 text-gray-400 hover:text-[#5db815] rounded-md text-xs font-medium cursor-pointer">
+                      Planes
+                    </div>
+                    <div className="px-3 py-1.5 text-gray-400 hover:text-[#5db815] rounded-md text-xs font-medium cursor-pointer">
+                      Cuenta
+                    </div>
+                  </nav>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="bg-white rounded-lg p-4 border border-gray-200">
-                    <div className="text-sm text-gray-500 mb-1">Áreas monitoreadas</div>
-                    <div className="text-2xl font-bold text-gray-900">3</div>
+                {/* Main Content Area */}
+                <div className="flex-1 bg-gray-50 p-6">
+                  <div className="mb-4">
+                    <h3 className="text-xl font-bold text-gray-900 mb-1">
+                      Bienvenido a CoperniGeo
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      Monitorea tus cultivos mediante imágenes satelitales
+                    </p>
                   </div>
-                  <div className="bg-white rounded-lg p-4 border border-gray-200">
-                    <div className="text-sm text-gray-500 mb-1">Reportes activos</div>
-                    <div className="text-2xl font-bold text-gray-900">5</div>
-                  </div>
-                </div>
 
-                <div className="bg-white rounded-lg p-6 border border-gray-200">
-                  <h4 className="font-semibold text-gray-900 mb-4">Áreas recientes</h4>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between py-2 border-b border-gray-100">
-                      <div>
-                        <div className="font-medium text-gray-900">Campo Norte</div>
-                        <div className="text-sm text-gray-500">Última actualización: hace 2 días</div>
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div className="bg-white rounded-lg p-3 border border-gray-200">
+                      <div className="text-xs text-gray-500 mb-1">Áreas monitoreadas</div>
+                      <div className="text-xl font-bold text-gray-900">3</div>
+                    </div>
+                    <div className="bg-white rounded-lg p-3 border border-gray-200">
+                      <div className="text-xs text-gray-500 mb-1">Reportes activos</div>
+                      <div className="text-xl font-bold text-gray-900">5</div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-lg p-4 border border-gray-200">
+                    <h4 className="font-semibold text-sm text-gray-900 mb-3">Áreas recientes</h4>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between py-1.5 border-b border-gray-100">
+                        <div>
+                          <div className="font-medium text-sm text-gray-900">Campo Norte</div>
+                          <div className="text-xs text-gray-500">Última actualización: hace 2 días</div>
+                        </div>
+                        <div className="px-2 py-0.5 bg-[#5db815]/20 text-[#4a9a11] rounded-full text-xs font-medium">
+                          NDVI: 0.72
+                        </div>
                       </div>
-                      <div className="px-3 py-1 bg-[#5db815]/20 text-[#4a9a11] rounded-full text-xs font-medium">
+                      <div className="flex items-center justify-between py-1.5 border-b border-gray-100">
+                        <div>
+                          <div className="font-medium text-sm text-gray-900">Campo Sur</div>
+                          <div className="text-xs text-gray-500">Última actualización: hace 5 días</div>
+                        </div>
+                        <div className="px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full text-xs font-medium">
+                          NDVI: 0.58
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between py-1.5">
+                        <div>
+                          <div className="font-medium text-sm text-gray-900">Campo Este</div>
+                          <div className="text-xs text-gray-500">Última actualización: hace 1 semana</div>
+                        </div>
+                        <div className="px-2 py-0.5 bg-[#5db815]/20 text-[#4a9a11] rounded-full text-xs font-medium">
+                          NDVI: 0.81
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Dashboard Preview - Satellite Analysis */}
+          <div className="flex-1 max-w-[48%]" style={{ perspective: '1000px' }}>
+            <div className="bg-gray-800 rounded-lg shadow-2xl overflow-hidden border border-gray-700" style={{ 
+              transform: 'perspective(1000px) rotateY(-6deg) rotateX(0deg) scale(1.02)',
+              transformStyle: 'preserve-3d'
+            }}>
+              {/* Analysis Header */}
+              <div className="bg-gray-800 border-b border-gray-700 px-4 py-3 flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-2.5 h-2.5 rounded-full bg-red-500"></div>
+                  <div className="w-2.5 h-2.5 rounded-full bg-yellow-500"></div>
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#5db815]"></div>
+                </div>
+                <div className="text-gray-400 text-xs">copernigeo.com/analisis</div>
+              </div>
+
+              {/* Analysis Content */}
+              <div className="flex">
+                {/* Sidebar */}
+                <div className="w-48 bg-gray-900 border-r border-gray-700 p-4">
+                  <h2 className="text-lg font-bold text-[#5db815] mb-4">CoperniGeo</h2>
+                  <nav className="space-y-1.5">
+                    <div className="px-3 py-1.5 text-gray-400 hover:text-[#5db815] rounded-md text-xs font-medium cursor-pointer">
+                      Inicio
+                    </div>
+                    <div className="px-3 py-1.5 text-[#5db815] bg-[#5db815]/10 rounded-md text-xs font-medium">
+                      Imágenes
+                    </div>
+                    <div className="px-3 py-1.5 text-gray-400 hover:text-[#5db815] rounded-md text-xs font-medium cursor-pointer">
+                      Automatizar reportes
+                    </div>
+                    <div className="px-3 py-1.5 text-gray-400 hover:text-[#5db815] rounded-md text-xs font-medium cursor-pointer">
+                      Planes
+                    </div>
+                    <div className="px-3 py-1.5 text-gray-400 hover:text-[#5db815] rounded-md text-xs font-medium cursor-pointer">
+                      Cuenta
+                    </div>
+                  </nav>
+                </div>
+
+                {/* Main Content Area */}
+                <div className="flex-1 bg-gray-50 p-6">
+                  <div className="mb-4">
+                    <h3 className="text-xl font-bold text-gray-900 mb-1">
+                      Campo Norte
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      Análisis NDVI - 15 Dic 2024
+                    </p>
+                  </div>
+
+                  {/* Satellite Image with NDVI Overlay */}
+                  <div className="relative h-48 bg-gradient-to-br from-green-600 via-green-400 to-yellow-300 rounded-lg overflow-hidden mb-4 border border-gray-200">
+                    {/* Simulated satellite imagery with NDVI colors */}
+                    <div className="absolute inset-0">
+                      {/* Green areas (healthy vegetation) */}
+                      <div className="absolute top-0 left-0 w-1/3 h-2/3 bg-gradient-to-br from-green-600 to-green-500 opacity-80"></div>
+                      <div className="absolute top-1/4 right-1/4 w-1/4 h-1/3 bg-green-500 opacity-70"></div>
+                      {/* Yellow areas (moderate vegetation) */}
+                      <div className="absolute bottom-0 right-0 w-2/5 h-1/3 bg-gradient-to-tl from-yellow-400 to-yellow-300 opacity-75"></div>
+                      <div className="absolute top-1/2 left-1/2 w-1/5 h-1/4 bg-yellow-400 opacity-60"></div>
+                      {/* Red areas (low vegetation) */}
+                      <div className="absolute bottom-1/4 left-1/3 w-1/6 h-1/5 bg-red-400 opacity-50"></div>
+                      {/* Grid overlay for satellite look */}
+                      <div className="absolute inset-0" style={{
+                        backgroundImage: 'linear-gradient(rgba(0,0,0,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.1) 1px, transparent 1px)',
+                        backgroundSize: '20px 20px'
+                      }}></div>
+                    </div>
+                    
+                    {/* NDVI Legend */}
+                    <div className="absolute bottom-2 left-2 bg-white/90 backdrop-blur-sm rounded px-2 py-1.5 shadow-lg">
+                      <div className="text-xs font-semibold text-gray-900 mb-1">NDVI</div>
+                      <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-0.5">
+                          <div className="w-2.5 h-2.5 bg-red-500 rounded"></div>
+                          <span className="text-xs text-gray-600">0.0-0.3</span>
+                        </div>
+                        <div className="flex items-center gap-0.5">
+                          <div className="w-2.5 h-2.5 bg-yellow-400 rounded"></div>
+                          <span className="text-xs text-gray-600">0.3-0.6</span>
+                        </div>
+                        <div className="flex items-center gap-0.5">
+                          <div className="w-2.5 h-2.5 bg-green-500 rounded"></div>
+                          <span className="text-xs text-gray-600">0.6-1.0</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-lg p-4 border border-gray-200">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-semibold text-sm text-gray-900">Análisis NDVI</h4>
+                      <div className="px-2 py-0.5 bg-[#5db815]/20 text-[#4a9a11] rounded-full text-xs font-medium">
                         NDVI: 0.72
                       </div>
                     </div>
-                    <div className="flex items-center justify-between py-2 border-b border-gray-100">
-                      <div>
-                        <div className="font-medium text-gray-900">Campo Sur</div>
-                        <div className="text-sm text-gray-500">Última actualización: hace 5 días</div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          <span className="text-xs text-gray-700">Alta (0.6-1.0)</span>
+                        </div>
+                        <span className="text-xs font-medium text-gray-900">68%</span>
                       </div>
-                      <div className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs font-medium">
-                        NDVI: 0.58
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
+                          <span className="text-xs text-gray-700">Media (0.3-0.6)</span>
+                        </div>
+                        <span className="text-xs font-medium text-gray-900">26%</span>
                       </div>
-                    </div>
-                    <div className="flex items-center justify-between py-2">
-                      <div>
-                        <div className="font-medium text-gray-900">Campo Este</div>
-                        <div className="text-sm text-gray-500">Última actualización: hace 1 semana</div>
-                      </div>
-                      <div className="px-3 py-1 bg-[#5db815]/20 text-[#4a9a11] rounded-full text-xs font-medium">
-                        NDVI: 0.81
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-red-400 rounded-full"></div>
+                          <span className="text-xs text-gray-700">Baja (0.0-0.3)</span>
+                        </div>
+                        <span className="text-xs font-medium text-gray-900">6%</span>
                       </div>
                     </div>
                   </div>
