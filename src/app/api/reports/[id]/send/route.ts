@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getReport, markReportGenerated } from "@/lib/firestore/reports";
-import { getArea } from "@/lib/firestore/areas";
+import { getReportAdmin, markReportGeneratedAdmin, getAreaAdmin } from "@/lib/firestore/admin";
 import { initializeEarthEngine, getEarthEngine } from "@/lib/earthEngine";
 import { calculateIndex, getSentinel2Collection, getMostRecentImage } from "@/lib/indices/calculations";
 import { sendEmail } from "@/lib/email/resend";
@@ -8,6 +7,7 @@ import { generateReportPDF } from "@/lib/pdf/generateReportPDF";
 import { IndexType } from "@/types/report";
 import { getFrequencyLabel } from "@/lib/utils/reports";
 import { calculatePolygonArea, squareMetersToKm } from "@/lib/utils/geometry";
+import { uploadFileAdmin } from "@/lib/storage/admin-upload";
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120; // Allow up to 120 seconds for processing (reports may take longer)
@@ -22,9 +22,9 @@ export async function POST(
 ) {
   console.log(`[Report Send] Starting report send for ID: ${params.id}`);
   try {
-    // Get the report
-    console.log(`[Report Send] Fetching report from Firestore...`);
-    const report = await getReport(params.id);
+    // Get the report using Admin SDK (bypasses Firestore rules)
+    console.log(`[Report Send] Fetching report from Firestore (Admin SDK)...`);
+    const report = await getReportAdmin(params.id);
     
     if (!report) {
       console.error(`[Report Send] Report not found: ${params.id}`);
@@ -38,9 +38,9 @@ export async function POST(
     
     console.log(`[Report Send] Report found: ${report.id}, areas: ${report.areaIds.length}, indices: ${report.indices.join(", ")}`);
 
-    // Get area coordinates
+    // Get area coordinates using Admin SDK (bypasses Firestore rules)
     const areas = await Promise.all(
-      report.areaIds.map((areaId) => getArea(areaId))
+      report.areaIds.map((areaId) => getAreaAdmin(areaId))
     );
 
     const validAreas = areas.filter((area) => area !== null);
@@ -63,7 +63,10 @@ export async function POST(
       areaName: string;
       indexType: IndexType;
       imageUrl: string;
+      thumbnailUrl?: string;
       stats: { min: number; max: number; mean: number };
+      centerLat?: number;
+      centerLng?: number;
     }> = [];
 
     console.log(`[Report Send] Processing ${validAreas.length} areas with ${report.indices.length} indices each...`);
@@ -156,7 +159,7 @@ export async function POST(
           
           console.log(`[Report Send] Statistics computed for ${indexType}:`, statsValue);
 
-          // Generate image URL
+          // Generate image URL - use getMapId for tiles and also try to get thumbnail
           console.log(`[Report Send] Generating tile URL for ${indexType}...`);
           const mapId = await Promise.race([
             new Promise<any>((resolve, reject) => {
@@ -181,16 +184,59 @@ export async function POST(
           ]) as any;
           
           console.log(`[Report Send] Tile URL generated for ${indexType}`);
+          const tileUrl = mapId?.tile_fetcher?.url_format || mapId?.urlFormat || mapId?.url_format || "";
+          console.log(`[Report Send] Extracted tile URL: ${tileUrl.substring(0, 150)}...`);
 
+          // Try to get thumbnail URL if available (for email embedding)
+          let thumbnailUrl: string | null = null;
+          try {
+            // Earth Engine might provide a thumbnail URL in the mapId
+            thumbnailUrl = mapId?.thumbnailUrl || mapId?.thumbUrl || null;
+            if (thumbnailUrl) {
+              console.log(`[Report Send] Found thumbnail URL for ${indexType}`);
+            } else {
+              // Try to generate thumbnail using getThumbURL if available
+              // Note: This might not be available in Node.js client
+              if (typeof (clipped as any).getThumbURL === 'function') {
+                thumbnailUrl = await new Promise<string>((resolve, reject) => {
+                  (clipped as any).getThumbURL({
+                    dimensions: [800, 600],
+                    format: 'png',
+                    region: polygon,
+                    min: statsValue[`${indexType}_min`],
+                    max: statsValue[`${indexType}_max`],
+                    palette: indexType === "NDVI" || indexType === "NDRE"
+                      ? ["red", "yellow", "green"]
+                      : ["blue", "cyan", "yellow", "orange", "red"],
+                  }, (url: string, error?: Error) => {
+                    if (error) reject(error);
+                    else resolve(url);
+                  });
+                });
+                console.log(`[Report Send] Generated thumbnail URL for ${indexType}`);
+              }
+            }
+          } catch (thumbError: any) {
+            console.log(`[Report Send] Thumbnail generation not available or failed: ${thumbError.message}`);
+          }
+
+          // Calculate center coordinates for tile selection
+          const centerLat = coordinates.reduce((sum: number, coord: any) => sum + coord.lat, 0) / coordinates.length;
+          const centerLng = coordinates.reduce((sum: number, coord: any) => sum + coord.lng, 0) / coordinates.length;
+          console.log(`[Report Send] Calculated center: lat=${centerLat}, lng=${centerLng}`);
+          
           imageData.push({
             areaName: area.name,
             indexType,
-            imageUrl: mapId?.tile_fetcher?.url_format || mapId?.urlFormat || "",
+            imageUrl: tileUrl,
+            thumbnailUrl: thumbnailUrl || undefined,
             stats: {
               min: statsValue[`${indexType}_min`],
               max: statsValue[`${indexType}_max`],
               mean: statsValue[`${indexType}_mean`],
             },
+            centerLat,
+            centerLng,
           });
           console.log(`[Report Send] Completed ${indexType} for ${area.name}`);
         } catch (indexError: any) {
@@ -202,9 +248,15 @@ export async function POST(
     
     console.log(`[Report Send] Completed processing all areas. Total image data: ${imageData.length} items`);
 
-    // Generate email content
-    console.log(`[Report Send] Generating email HTML...`);
-    const emailHtml = generateReportEmail(report, imageData);
+    // Generate email content (async function that downloads images)
+    console.log(`[Report Send] Generating email HTML with images...`);
+    console.log(`[Report Send] Image data count: ${imageData.length}`);
+    imageData.forEach((data, idx) => {
+      console.log(`[Report Send] Image ${idx + 1}: ${data.areaName} - ${data.indexType}, URL: ${data.imageUrl.substring(0, 100)}..., center: (${data.centerLat}, ${data.centerLng})`);
+    });
+    const emailResult = await generateReportEmail(report, imageData);
+    const emailHtml = emailResult.html;
+    const imageAttachments = emailResult.attachments;
 
     // Generate PDF
     console.log(`[Report Send] Generating PDF for report ${report.id}...`);
@@ -244,25 +296,46 @@ export async function POST(
     
     try {
       console.log(`[Report Send] Preparing email...`);
+      
+      // Combine PDF attachment (if available) with inline image attachments
+      const allAttachments: Array<{
+        filename: string;
+        content: Buffer;
+        contentType: string;
+        cid?: string;
+      }> = [];
+      
+      // Note: No image attachments needed - images are hosted on Firebase Storage
+      // and embedded in HTML using public URLs
+      if (imageAttachments && imageAttachments.length > 0) {
+        console.log(`[Report Send] Note: ${imageAttachments.length} images are hosted on Firebase Storage (no attachments needed)`);
+      }
+      
+      // Add PDF attachment if available
+      if (pdfBuffer) {
+        console.log(`[Report Send] Adding PDF attachment...`);
+        allAttachments.push({
+          filename: `reporte-copernigeo-${reportDate.replace(/\//g, "-")}.pdf`,
+          content: pdfBuffer,
+          contentType: "application/pdf",
+        });
+      }
+      
       await sendEmail(
         report.email,
         `Reporte de Monitoreo - ${reportDate}`,
         emailHtml,
         undefined,
-        pdfBuffer ? [{
-          filename: `reporte-copernigeo-${reportDate.replace(/\//g, "-")}.pdf`,
-          content: pdfBuffer,
-          contentType: "application/pdf",
-        }] : undefined
+        allAttachments.length > 0 ? allAttachments : undefined
       );
-      console.log(`[Report Send] ✅ Email sent successfully for report ${report.id} to ${report.email}${pdfBuffer ? " with PDF attachment" : " (no PDF)"}`);
+      console.log(`[Report Send] ✅ Email sent successfully for report ${report.id} to ${report.email}${pdfBuffer ? " with PDF attachment" : " (no PDF)"}${imageAttachments && imageAttachments.length > 0 ? ` and ${imageAttachments.length} inline images` : ""}`);
     } catch (emailError: any) {
       console.error(`[Report Send] ❌ Email sending failed:`, emailError);
       throw new Error(`Failed to send email: ${emailError.message}`);
     }
 
-    // Mark report as generated (updates lastGenerated and nextRun)
-    await markReportGenerated(report.id);
+    // Mark report as generated using Admin SDK (bypasses Firestore rules)
+    await markReportGeneratedAdmin(report.id);
 
     return NextResponse.json({
       success: true,
@@ -278,15 +351,114 @@ export async function POST(
   }
 }
 
-function generateReportEmail(
+/**
+ * Convert lat/lng to tile coordinates
+ */
+function latLngToTile(lat: number, lng: number, zoom: number): { x: number; y: number } {
+  const n = Math.pow(2, zoom);
+  const x = Math.floor((lng + 180) / 360 * n);
+  const latRad = lat * Math.PI / 180;
+  const y = Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n);
+  return { x, y };
+}
+
+/**
+ * Download Earth Engine tile as base64 image for email embedding
+ */
+async function downloadTileAsBase64(
+  tileUrl: string, 
+  areaName: string, 
+  indexType: string,
+  centerLat?: number,
+  centerLng?: number
+): Promise<string | null> {
+  try {
+    // Use zoom level 12 for a good overview of the AOI
+    const zoom = 12;
+    let x: number, y: number;
+    
+    if (centerLat !== undefined && centerLng !== undefined) {
+      // Use actual center coordinates to get the correct tile
+      const tileCoords = latLngToTile(centerLat, centerLng, zoom);
+      x = tileCoords.x;
+      y = tileCoords.y;
+    } else {
+      // Fallback to center tile if coordinates not available
+      x = 1 << (zoom - 1);
+      y = 1 << (zoom - 1);
+    }
+    
+    let url = tileUrl;
+    console.log(`[Email] Original tile URL format: ${tileUrl.substring(0, 200)}...`);
+    
+    if (url.includes("{x}") || url.includes("{y}") || url.includes("{z}")) {
+      url = url
+        .replace(/{x}/g, x.toString())
+        .replace(/{y}/g, y.toString())
+        .replace(/{z}/g, zoom.toString());
+    } else if (url.includes("$")) {
+      // Earth Engine sometimes uses $x, $y, $z format
+      url = url
+        .replace(/\$x/g, x.toString())
+        .replace(/\$y/g, y.toString())
+        .replace(/\$z/g, zoom.toString());
+    } else {
+      // If no placeholders, try to append query params
+      const separator = url.includes('?') ? '&' : '?';
+      url = `${tileUrl}${separator}x=${x}&y=${y}&z=${zoom}`;
+    }
+    
+    console.log(`[Email] Downloading tile for ${areaName} - ${indexType} (tile ${x},${y} at zoom ${zoom})...`);
+    console.log(`[Email] Final URL: ${url.substring(0, 200)}...`);
+    
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'CoperniGeo-Email-Service/1.0',
+        },
+      });
+      
+      if (!response.ok) {
+        console.error(`[Email] Failed to download tile: ${response.status} ${response.statusText}`);
+        console.error(`[Email] Response headers:`, Object.fromEntries(response.headers.entries()));
+        const errorText = await response.text().catch(() => '');
+        console.error(`[Email] Error response body: ${errorText.substring(0, 200)}`);
+        return null;
+      }
+    
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      const base64 = buffer.toString('base64');
+      
+      // Determine content type (usually PNG for Earth Engine tiles)
+      const contentType = response.headers.get('content-type') || 'image/png';
+      
+      console.log(`[Email] ✅ Tile downloaded and converted to base64 (${base64.length} chars, buffer size: ${buffer.length} bytes)`);
+      return `data:${contentType};base64,${base64}`;
+    } catch (fetchError: any) {
+      console.error(`[Email] Fetch error downloading tile for ${areaName} - ${indexType}:`, fetchError.message);
+      console.error(`[Email] Fetch error stack:`, fetchError.stack);
+      return null;
+    }
+  } catch (error: any) {
+    console.error(`[Email] Error downloading tile for ${areaName} - ${indexType}:`, error.message);
+    console.error(`[Email] Error stack:`, error.stack);
+    return null;
+  }
+}
+
+async function generateReportEmail(
   report: any,
   imageData: Array<{
     areaName: string;
     indexType: IndexType;
     imageUrl: string;
+    thumbnailUrl?: string;
     stats: { min: number; max: number; mean: number };
+    centerLat?: number;
+    centerLng?: number;
   }>
-): string {
+): Promise<{ html: string; attachments: Array<{ filename: string; content: Buffer; contentType: string; cid?: string }> }> {
   const reportDate = new Date().toLocaleDateString("es-MX", {
     year: "numeric",
     month: "long",
@@ -294,61 +466,202 @@ function generateReportEmail(
   });
 
   let imagesHtml = "";
-  for (const data of imageData) {
-    imagesHtml += `
-      <div style="margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 5px;">
-        <h3 style="color: #16a34a; margin-top: 0;">${data.areaName} - ${data.indexType}</h3>
-        <p><strong>Valores:</strong> Mín: ${data.stats.min.toFixed(3)}, Máx: ${data.stats.max.toFixed(3)}, Promedio: ${data.stats.mean.toFixed(3)}</p>
-        <p><em>Nota: Las imágenes están disponibles en el dashboard.</em></p>
+  const imageAttachments: Array<{
+    filename: string;
+    content: Buffer;
+    contentType: string;
+    cid?: string;
+  }> = [];
+  
+  console.log(`[Email] Starting to process ${imageData.length} images for email (uploading to Firebase Storage with Admin SDK)...`);
+  for (let i = 0; i < imageData.length; i++) {
+    const data = imageData[i];
+    console.log(`[Email] Processing image ${i + 1}/${imageData.length}: ${data.areaName} - ${data.indexType}`);
+    console.log(`[Email] Tile URL: ${data.imageUrl.substring(0, 150)}...`);
+    console.log(`[Email] Thumbnail URL: ${data.thumbnailUrl ? data.thumbnailUrl.substring(0, 150) + '...' : 'not available'}`);
+    console.log(`[Email] Center coordinates: lat=${data.centerLat}, lng=${data.centerLng}`);
+    
+    // Try thumbnail URL first (if available), otherwise download tile
+    let imageBuffer: Buffer | null = null;
+    let contentType: string = 'image/png';
+    
+    if (data.thumbnailUrl) {
+      console.log(`[Email] Attempting to download thumbnail URL...`);
+      try {
+        const response = await fetch(data.thumbnailUrl, {
+          headers: { 'User-Agent': 'CoperniGeo-Email-Service/1.0' },
+        });
+        if (response.ok) {
+          const arrayBuffer = await response.arrayBuffer();
+          imageBuffer = Buffer.from(arrayBuffer);
+          contentType = response.headers.get('content-type') || 'image/png';
+          console.log(`[Email] ✅ Thumbnail downloaded successfully (${imageBuffer.length} bytes)`);
+        } else {
+          console.log(`[Email] Thumbnail download failed: ${response.status}, trying tile download...`);
+        }
+      } catch (thumbError: any) {
+        console.log(`[Email] Thumbnail download error: ${thumbError.message}, trying tile download...`);
+      }
+    }
+    
+    // If thumbnail didn't work, try downloading tile
+    if (!imageBuffer) {
+      const tileBase64 = await downloadTileAsBase64(
+        data.imageUrl, 
+        data.areaName, 
+        data.indexType,
+        data.centerLat,
+        data.centerLng
+      );
+      if (tileBase64) {
+        // Extract base64 data from data URI
+        const base64Match = tileBase64.match(/^data:([^;]+);base64,(.+)$/);
+        if (base64Match) {
+          contentType = base64Match[1];
+          imageBuffer = Buffer.from(base64Match[2], 'base64');
+          console.log(`[Email] ✅ Tile downloaded and converted to buffer (${imageBuffer.length} bytes)`);
+        }
+      }
+    }
+    
+    if (imageBuffer) {
+      // Upload to Firebase Storage using Admin SDK and get public URL
+      const safeAreaName = data.areaName.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
+      const timestamp = Date.now();
+      const filename = `${safeAreaName}-${data.indexType.toLowerCase()}.png`;
+      const storagePath = `email-images/${timestamp}-${filename}`;
+      
+      try {
+        console.log(`[Email] Uploading image ${i + 1} to Firebase Storage (Admin SDK): ${storagePath}...`);
+        const imageUrl = await uploadFileAdmin(imageBuffer, storagePath, contentType);
+        console.log(`[Email] ✅ Image uploaded successfully: ${imageUrl.substring(0, 100)}...`);
+        
+        // Use public URL in HTML - images will display inline in emails
+        // Fixed width of 600px to prevent distortion, height auto maintains aspect ratio
+        const imageTag = `<img src="${imageUrl}" alt="${data.areaName} - ${data.indexType}" width="600" style="display: block; max-width: 100%; height: auto; border-radius: 5px;" />`;
+        
+        imagesHtml += `
+      <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom: 20px;">
+        <tr>
+          <td style="padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: white;">
+            <h3 style="color: #5db815; margin-top: 0;">${data.areaName} - ${data.indexType}</h3>
+            <p style="margin-top: 10px; margin-bottom: 15px;"><strong>Valores:</strong> Mín: ${data.stats.min.toFixed(3)}, Máx: ${data.stats.max.toFixed(3)}, Promedio: ${data.stats.mean.toFixed(3)}</p>
+            <table cellpadding="0" cellspacing="0" border="0" width="600" align="center" style="margin: 15px auto;">
+              <tr>
+                <td align="center">
+                  ${imageTag}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    `;
+        console.log(`[Email] Image ${i + 1} embedded using Firebase Storage public URL`);
+      } catch (uploadError: any) {
+        console.error(`[Email] Failed to upload image ${i + 1}:`, uploadError.message);
+        // Fallback: show data without image
+        imagesHtml += `
+      <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom: 20px;">
+        <tr>
+          <td style="padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: white;">
+            <h3 style="color: #5db815; margin-top: 0;">${data.areaName} - ${data.indexType}</h3>
+            <p style="margin-top: 10px; margin-bottom: 10px;"><strong>Valores:</strong> Mín: ${data.stats.min.toFixed(3)}, Máx: ${data.stats.max.toFixed(3)}, Promedio: ${data.stats.mean.toFixed(3)}</p>
+            <p style="color: #666; font-style: italic;">Imagen no disponible - ver en dashboard</p>
+          </td>
+        </tr>
+      </table>
+    `;
+      }
+    } else {
+      console.log(`[Email] Image ${i + 1} FAILED - no image buffer`);
+      imagesHtml += `
+      <div style="margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: white;">
+        <h3 style="color: #5db815; margin-top: 0;">${data.areaName} - ${data.indexType}</h3>
+        <p style="color: #666; font-style: italic;">Imagen no disponible - ver en dashboard</p>
+        <p style="margin-top: 10px;"><strong>Valores:</strong> Mín: ${data.stats.min.toFixed(3)}, Máx: ${data.stats.max.toFixed(3)}, Promedio: ${data.stats.mean.toFixed(3)}</p>
       </div>
     `;
+    }
   }
-
-  return `
+  
+  // Build the complete email HTML template using tables for better email client compatibility
+  const emailHtml = `
     <!DOCTYPE html>
     <html>
     <head>
       <meta charset="utf-8">
-      <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background-color: #16a34a; color: white; padding: 20px; border-radius: 5px 5px 0 0; }
-        .content { background-color: #f9f9f9; padding: 20px; border-radius: 0 0 5px 5px; }
-        .button { display: inline-block; padding: 10px 20px; background-color: #16a34a; color: white; text-decoration: none; border-radius: 5px; margin-top: 20px; }
-      </style>
     </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1 style="margin: 0;">Reporte de Monitoreo CoperniGeo</h1>
-        </div>
-        <div class="content">
-          <p>Hola,</p>
-          <p>Aquí está tu reporte de monitoreo satelital generado el ${reportDate}.</p>
-          
-          <h2>Configuración del Reporte</h2>
-          <ul>
-            <li><strong>Frecuencia:</strong> ${getFrequencyLabel(report.frequency)}</li>
-            <li><strong>Índices:</strong> ${report.indices.join(", ")}</li>
-            <li><strong>Cobertura de nubes:</strong> ${report.cloudCoverage}%</li>
-          </ul>
-
-          <h2>Resultados</h2>
-          ${imagesHtml}
-
-                  <a href="https://copernigeo.com/dashboard/imagenes" class="button">Ver en Dashboard</a>
+    <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+      <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #f4f3f4;">
+        <tr>
+          <td align="center" style="padding: 20px;">
+            <table cellpadding="0" cellspacing="0" border="0" width="600" style="max-width: 600px;">
+              <!-- Header -->
+              <tr>
+                <td style="background-color: #5db815; color: white; padding: 20px; border-radius: 5px 5px 0 0;">
+                  <h1 style="margin: 0; font-size: 24px;">Reporte de Monitoreo CoperniGeo</h1>
+                </td>
+              </tr>
+              <!-- Content -->
+              <tr>
+                <td style="background-color: #ffffff; padding: 20px;">
+                  <p>Hola,</p>
+                  <p>Aquí está tu reporte de monitoreo satelital generado el ${reportDate}.</p>
                   
-                  <p style="margin-top: 20px; padding: 15px; background-color: #e0f2fe; border-left: 4px solid #0284c7; border-radius: 4px;">
-                    <strong>📎 PDF Adjunto:</strong> Este reporte incluye un PDF detallado con todos los resultados y estadísticas adjunto a este correo.
-                  </p>
-                  
-                  <p style="margin-top: 30px; font-size: 12px; color: #666;">
+                  <h2 style="color: #242424;">Configuración del Reporte</h2>
+                  <ul>
+                    <li><strong>Frecuencia:</strong> ${getFrequencyLabel(report.frequency)}</li>
+                    <li><strong>Índices:</strong> ${report.indices.join(", ")}</li>
+                    <li><strong>Cobertura de nubes:</strong> ${report.cloudCoverage}%</li>
+                  </ul>
+
+                  <h2 style="color: #242424;">Resultados</h2>
+                </td>
+              </tr>
+              <!-- Images -->
+              <tr>
+                <td style="background-color: #ffffff; padding: 0 20px 20px 20px;">
+                  ${imagesHtml}
+                </td>
+              </tr>
+              <!-- Button -->
+              <tr>
+                <td style="background-color: #ffffff; padding: 0 20px 20px 20px;" align="center">
+                  <a href="https://copernigeo.com/dashboard/imagenes" style="display: inline-block; padding: 12px 24px; background-color: #5db815; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Ver en Dashboard</a>
+                </td>
+              </tr>
+              <!-- PDF Notice -->
+              <tr>
+                <td style="background-color: #ffffff; padding: 0 20px 20px 20px;">
+                  <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top: 20px; padding: 15px; background-color: #e0f2fe; border-left: 4px solid #0284c7; border-radius: 4px;">
+                    <tr>
+                      <td>
+                        <strong>📎 PDF Adjunto:</strong> Este reporte incluye un PDF detallado con todos los resultados y estadísticas adjunto a este correo.
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              <!-- Footer -->
+              <tr>
+                <td style="background-color: #ffffff; padding: 0 20px 20px 20px;">
+                  <p style="margin-top: 30px; font-size: 12px; color: #666; text-align: center;">
                     Este es un reporte automático de CoperniGeo. Para modificar la configuración, visita tu dashboard.
                   </p>
-        </div>
-      </div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
     </body>
     </html>
   `;
+  
+  console.log(`[Email] Generated email HTML with ${imageAttachments.length} inline image attachments`);
+  
+  // Return both HTML and attachments
+  return { html: emailHtml, attachments: imageAttachments };
 }
 

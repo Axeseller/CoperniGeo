@@ -1,0 +1,140 @@
+rules_version = '2';
+
+// Firestore Security Rules for CoperniGeo
+// Last updated: 2025-12-12
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ============================================
+    // HELPER FUNCTIONS
+    // ============================================
+    
+    // Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Check if user owns the resource
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Check if document being created has correct userId
+    function hasValidUserId() {
+      return request.resource.data.userId == request.auth.uid;
+    }
+    
+    // Validate area data structure
+    function isValidArea() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['name', 'userId', 'coordinates', 'createdAt', 'updatedAt'])
+        && data.name is string
+        && data.name.size() > 0
+        && data.userId is string
+        && data.coordinates is list
+        && data.coordinates.size() >= 3
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+    
+    // Validate report data structure
+    function isValidReport() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['userId', 'frequency', 'indices', 'cloudCoverage', 'email', 'areaIds'])
+        && data.userId is string
+        && data.frequency is string
+        && data.frequency in ['3days', '5days', 'weekly', 'monthly']
+        && data.indices is list
+        && data.indices.size() > 0
+        && data.cloudCoverage is number
+        && data.cloudCoverage >= 0 && data.cloudCoverage <= 100
+        && data.email is string
+        && data.email.matches('.*@.*\\..*')
+        && data.areaIds is list;
+    }
+    
+    // ============================================
+    // AREAS COLLECTION
+    // ============================================
+    // Users can manage their own areas (polygons)
+    match /areas/{areaId} {
+      // Allow read if user owns the area
+      allow read: if isAuthenticated() && isOwner(resource.data.userId);
+      
+      // Allow create if authenticated and userId matches
+      allow create: if isAuthenticated() 
+                    && hasValidUserId() 
+                    && isValidArea();
+      
+      // Allow update if user owns the area
+      allow update: if isAuthenticated() 
+                    && isOwner(resource.data.userId)
+                    && hasValidUserId()
+                    && isValidArea();
+      
+      // Allow delete if user owns the area
+      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+    }
+    
+    // ============================================
+    // REPORTS COLLECTION
+    // ============================================
+    // Users can manage their own report configurations
+    match /reports/{reportId} {
+      // Allow read if user owns the report
+      allow read: if isAuthenticated() && isOwner(resource.data.userId);
+      
+      // Allow create if authenticated and userId matches
+      allow create: if isAuthenticated() 
+                    && hasValidUserId()
+                    && isValidReport();
+      
+      // Allow update if user owns the report
+      // Also allow server to update (for marking reports as generated)
+      allow update: if isAuthenticated() && (
+        isOwner(resource.data.userId) // User updating their own report
+        || isOwner(request.resource.data.userId) // Server updating report status
+      );
+      
+      // Allow delete if user owns the report
+      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+    }
+    
+    // ============================================
+    // CACHE COLLECTION
+    // ============================================
+    // Satellite imagery cache - shared across users
+    match /cache/{cacheId} {
+      // Anyone authenticated can read cache
+      allow read: if isAuthenticated();
+      
+      // Only server (via Admin SDK) can write
+      // Client writes are blocked
+      allow write: if false;
+    }
+    
+    // ============================================
+    // USERS COLLECTION (if you add user profiles)
+    // ============================================
+    match /users/{userId} {
+      // Users can read their own profile
+      allow read: if isAuthenticated() && isOwner(userId);
+      
+      // Users can create/update their own profile
+      allow create, update: if isAuthenticated() && isOwner(userId);
+      
+      // Users can delete their own profile
+      allow delete: if isAuthenticated() && isOwner(userId);
+    }
+    
+    // ============================================
+    // DEFAULT DENY (Security by default)
+    // ============================================
+    // Any collection not explicitly allowed above is denied
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+

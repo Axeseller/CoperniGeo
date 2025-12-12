@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDueReports, markReportGenerated } from "@/lib/firestore/reports";
-import { getArea } from "@/lib/firestore/areas";
+import { getDueReportsAdmin, markReportGeneratedAdmin, getAreaAdmin } from "@/lib/firestore/admin";
 import { initializeEarthEngine, getEarthEngine } from "@/lib/earthEngine";
 import { calculateIndex, getSentinel2Collection, getMostRecentImage } from "@/lib/indices/calculations";
 import { uploadFile } from "@/lib/storage/upload";
@@ -18,8 +17,8 @@ export async function POST(request: NextRequest) {
     // For now, we'll allow calls without auth for cron jobs
     // In production, add proper authentication
 
-    // Get all due reports
-    const reports = await getDueReports();
+    // Get all due reports using Admin SDK (bypasses Firestore rules)
+    const reports = await getDueReportsAdmin();
 
     if (reports.length === 0) {
       return NextResponse.json({ message: "No reports due for generation" });
@@ -33,9 +32,9 @@ export async function POST(request: NextRequest) {
 
     for (const report of reports) {
       try {
-        // Get area coordinates
+        // Get area coordinates using Admin SDK (bypasses Firestore rules)
         const areas = await Promise.all(
-          report.areaIds.map((areaId) => getArea(areaId))
+          report.areaIds.map((areaId) => getAreaAdmin(areaId))
         );
 
         const validAreas = areas.filter((area) => area !== null);
@@ -52,6 +51,8 @@ export async function POST(request: NextRequest) {
           indexType: IndexType;
           imageUrl: string;
           stats: { min: number; max: number; mean: number };
+          centerLat?: number;
+          centerLng?: number;
         }> = [];
 
         for (const area of validAreas) {
@@ -109,6 +110,10 @@ export async function POST(request: NextRequest) {
                   : ["blue", "cyan", "yellow", "orange", "red"],
             });
 
+            // Calculate center coordinates for tile selection
+            const centerLat = coordinates.reduce((sum: number, coord: any) => sum + coord.lat, 0) / coordinates.length;
+            const centerLng = coordinates.reduce((sum: number, coord: any) => sum + coord.lng, 0) / coordinates.length;
+
             imageData.push({
               areaName: area.name,
               indexType,
@@ -118,12 +123,14 @@ export async function POST(request: NextRequest) {
                 max: statsValue[`${indexType}_max`],
                 mean: statsValue[`${indexType}_mean`],
               },
+              centerLat,
+              centerLng,
             });
           }
         }
 
-        // Generate email content
-        const emailHtml = generateReportEmail(report, imageData);
+        // Generate email content (async function that downloads images)
+        const emailHtml = await generateReportEmail(report, imageData);
 
         // Generate PDF
         console.log(`[Report Generate] Generating PDF for report ${report.id}...`);
@@ -150,8 +157,8 @@ export async function POST(request: NextRequest) {
         
         console.log(`[Report Generate] PDF generated and email sent for report ${report.id}`);
 
-        // Mark report as generated
-        await markReportGenerated(report.id!);
+        // Mark report as generated using Admin SDK (bypasses Firestore rules)
+        await markReportGeneratedAdmin(report.id!);
 
         results.push({ reportId: report.id, status: "success" });
       } catch (error: any) {
@@ -170,28 +177,77 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function generateReportEmail(
+async function generateReportEmail(
   report: any,
   imageData: Array<{
     areaName: string;
     indexType: IndexType;
     imageUrl: string;
     stats: { min: number; max: number; mean: number };
+    centerLat?: number;
+    centerLng?: number;
   }>
-): string {
+): Promise<string> {
   const reportDate = new Date().toLocaleDateString("es-MX", {
     year: "numeric",
     month: "long",
     day: "numeric",
   });
 
+  // Import the download function (we'll define it here for this file)
+  const downloadTileAsBase64 = async (
+    tileUrl: string, 
+    areaName: string, 
+    indexType: string,
+    centerLat?: number,
+    centerLng?: number
+  ): Promise<string | null> => {
+    try {
+      const zoom = 12;
+      let x: number, y: number;
+      
+      if (centerLat !== undefined && centerLng !== undefined) {
+        const n = Math.pow(2, zoom);
+        x = Math.floor((centerLng + 180) / 360 * n);
+        const latRad = centerLat * Math.PI / 180;
+        y = Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n);
+      } else {
+        x = 1 << (zoom - 1);
+        y = 1 << (zoom - 1);
+      }
+      
+      let url = tileUrl;
+      if (url.includes("{x}") || url.includes("{y}") || url.includes("{z}")) {
+        url = url.replace(/{x}/g, x.toString()).replace(/{y}/g, y.toString()).replace(/{z}/g, zoom.toString());
+      } else {
+        url = `${tileUrl}&x=${x}&y=${y}&z=${zoom}`;
+      }
+      
+      const response = await fetch(url, { headers: { 'User-Agent': 'CoperniGeo-Email-Service/1.0' } });
+      if (!response.ok) return null;
+      
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      const base64 = buffer.toString('base64');
+      const contentType = response.headers.get('content-type') || 'image/png';
+      return `data:${contentType};base64,${base64}`;
+    } catch (error) {
+      return null;
+    }
+  };
+
   let imagesHtml = "";
   for (const data of imageData) {
+    const imageBase64 = await downloadTileAsBase64(data.imageUrl, data.areaName, data.indexType, data.centerLat, data.centerLng);
+    const imageTag = imageBase64 
+      ? `<img src="${imageBase64}" alt="${data.areaName} - ${data.indexType}" style="max-width: 100%; height: auto; border-radius: 5px; margin: 10px 0;" />`
+      : `<p style="color: #666; font-style: italic;">Imagen no disponible - ver en dashboard</p>`;
+    
     imagesHtml += `
-      <div style="margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 5px;">
-        <h3 style="color: #16a34a; margin-top: 0;">${data.areaName} - ${data.indexType}</h3>
-        <p><strong>Valores:</strong> Mín: ${data.stats.min.toFixed(3)}, Máx: ${data.stats.max.toFixed(3)}, Promedio: ${data.stats.mean.toFixed(3)}</p>
-        <p><em>Nota: Las imágenes están disponibles en el dashboard.</em></p>
+      <div style="margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: white;">
+        <h3 style="color: #5db815; margin-top: 0;">${data.areaName} - ${data.indexType}</h3>
+        ${imageTag}
+        <p style="margin-top: 10px;"><strong>Valores:</strong> Mín: ${data.stats.min.toFixed(3)}, Máx: ${data.stats.max.toFixed(3)}, Promedio: ${data.stats.mean.toFixed(3)}</p>
       </div>
     `;
   }
@@ -204,9 +260,9 @@ function generateReportEmail(
       <style>
         body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background-color: #16a34a; color: white; padding: 20px; border-radius: 5px 5px 0 0; }
+        .header { background-color: #5db815; color: white; padding: 20px; border-radius: 5px 5px 0 0; }
         .content { background-color: #f9f9f9; padding: 20px; border-radius: 0 0 5px 5px; }
-        .button { display: inline-block; padding: 10px 20px; background-color: #16a34a; color: white; text-decoration: none; border-radius: 5px; margin-top: 20px; }
+        .button { display: inline-block; padding: 10px 20px; background-color: #5db815; color: white; text-decoration: none; border-radius: 5px; margin-top: 20px; }
       </style>
     </head>
     <body>

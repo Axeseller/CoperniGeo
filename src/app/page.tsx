@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 type FeatureType = "satellite" | "analysis" | "reports" | null;
 
@@ -21,6 +21,10 @@ interface Feature {
 export default function Home() {
   const [selectedFeature, setSelectedFeature] = useState<FeatureType>(null);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const carouselRef = useRef<HTMLDivElement>(null);
+  const touchStartX = useRef<number>(0);
+  const touchStartY = useRef<number>(0);
 
   // Prevent body scroll when modal is open
   useEffect(() => {
@@ -44,6 +48,75 @@ export default function Home() {
 
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Prevent body scroll when mobile menu is open
+  useEffect(() => {
+    if (isMobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isMobileMenuOpen]);
+
+  // Handle carousel touch events to distinguish horizontal vs vertical swipes
+  useEffect(() => {
+    const carousel = carouselRef.current;
+    if (!carousel) return;
+
+    let isHorizontalSwipe = false;
+    let hasMoved = false;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      touchStartX.current = e.touches[0].clientX;
+      touchStartY.current = e.touches[0].clientY;
+      isHorizontalSwipe = false;
+      hasMoved = false;
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!touchStartX.current || !touchStartY.current) return;
+
+      const touchX = e.touches[0].clientX;
+      const touchY = e.touches[0].clientY;
+      const diffX = Math.abs(touchX - touchStartX.current);
+      const diffY = Math.abs(touchY - touchStartY.current);
+
+      if (!hasMoved && (diffX > 5 || diffY > 5)) {
+        hasMoved = true;
+        // Determine swipe direction on first significant movement
+        isHorizontalSwipe = diffX > diffY;
+      }
+
+      // If it's a horizontal swipe, let the carousel handle it
+      // If it's vertical, don't interfere - let page scroll naturally
+      if (hasMoved && !isHorizontalSwipe && diffY > 10) {
+        // Vertical swipe detected - stop tracking to allow page scroll
+        touchStartX.current = 0;
+        touchStartY.current = 0;
+      }
+    };
+
+    const handleTouchEnd = () => {
+      touchStartX.current = 0;
+      touchStartY.current = 0;
+      isHorizontalSwipe = false;
+      hasMoved = false;
+    };
+
+    carousel.addEventListener('touchstart', handleTouchStart, { passive: true });
+    carousel.addEventListener('touchmove', handleTouchMove, { passive: true });
+    carousel.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+    return () => {
+      carousel.removeEventListener('touchstart', handleTouchStart);
+      carousel.removeEventListener('touchmove', handleTouchMove);
+      carousel.removeEventListener('touchend', handleTouchEnd);
+    };
   }, []);
 
   const features: Feature[] = [
@@ -192,73 +265,158 @@ export default function Home() {
     <div className="min-h-screen bg-[#f4f3f4] overflow-x-hidden">
       {/* Navigation Bar */}
       <nav className={`fixed top-0 left-0 right-0 z-50 ${
-        isScrolled ? 'pt-2' : ''
+        isScrolled ? 'pt-0 md:pt-2' : ''
       }`}>
         <div className={`max-w-7xl mx-auto ${
           isScrolled 
-            ? 'bg-white border border-gray-200 shadow-sm rounded-lg' 
+            ? 'bg-white border border-gray-200 shadow-sm md:rounded-lg' 
             : 'bg-[#f4f3f4] border-b border-gray-300'
         }`}>
           <div className="px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-8">
-              <h1 className="text-2xl font-bold text-[#5db815]">CoperniGeo</h1>
-              <div className="hidden md:flex space-x-6">
-                <button className="text-[#121212] hover:text-[#5db815] px-3 py-2 rounded-md text-sm font-medium transition-colors">
-                  Producto
-                </button>
-                <button className="text-[#121212] hover:text-[#5db815] px-3 py-2 rounded-md text-sm font-medium transition-colors">
-                  Recursos
-                </button>
-                <button className="text-[#121212] hover:text-[#5db815] px-3 py-2 rounded-md text-sm font-medium transition-colors">
-                  Precios
-                </button>
-                <button className="text-[#121212] hover:text-[#5db815] px-3 py-2 rounded-md text-sm font-medium transition-colors">
-                  Clientes
-                </button>
-                <button className="text-[#121212] hover:text-[#5db815] px-3 py-2 rounded-md text-sm font-medium transition-colors">
-                  Contacto
+              <div className="flex items-center space-x-4 md:space-x-8">
+                <h1 className="text-xl md:text-2xl font-bold text-[#5db815]">CoperniGeo</h1>
+                <div className="hidden md:flex space-x-6">
+                  <button className="text-[#121212] hover:text-[#5db815] px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                    Producto
+                  </button>
+                  <button className="text-[#121212] hover:text-[#5db815] px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                    Recursos
+                  </button>
+                  <button className="text-[#121212] hover:text-[#5db815] px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                    Precios
+                  </button>
+                  <button className="text-[#121212] hover:text-[#5db815] px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                    Clientes
+                  </button>
+                  <button className="text-[#121212] hover:text-[#5db815] px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                    Contacto
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2 md:space-x-4">
+                <Link
+                  href="/inicia-sesion"
+                  className="hidden sm:inline-block text-[#121212] hover:text-[#5db815] px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                >
+                  Inicia sesión
+                </Link>
+                <Link
+                  href="/registrarte"
+                  className="bg-[#5db815] text-white px-3 md:px-4 py-2 rounded-md text-sm font-medium hover:bg-[#4a9a11] transition-colors"
+                >
+                  Registrarte
+                </Link>
+                {/* Hamburger Menu Button */}
+                <button
+                  onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                  className="md:hidden p-2 rounded-md text-[#121212] hover:bg-gray-100 transition-colors"
+                  aria-label="Toggle menu"
+                >
+                  {isMobileMenuOpen ? (
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  ) : (
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                  )}
                 </button>
               </div>
             </div>
-            <div className="flex items-center space-x-4">
-              <Link
-                href="/inicia-sesion"
-                className="text-[#121212] hover:text-[#5db815] px-4 py-2 rounded-md text-sm font-medium transition-colors"
-              >
-                Inicia sesión
-              </Link>
-              <Link
-                href="/registrarte"
-                className="bg-[#5db815] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#4a9a11] transition-colors"
-              >
-                Registrarte
-              </Link>
-            </div>
-          </div>
           </div>
         </div>
       </nav>
 
+      {/* Mobile Menu Drawer */}
+      {isMobileMenuOpen && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/50 z-40 md:hidden"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+          {/* Drawer */}
+          <div className="fixed top-16 right-0 bottom-0 w-80 max-w-[85vw] bg-white shadow-xl z-50 md:hidden transform transition-transform duration-300 ease-in-out">
+            <div className="flex flex-col h-full">
+              <div className="p-6 space-y-4 overflow-y-auto">
+                <Link
+                  href="#"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="block text-[#121212] hover:text-[#5db815] py-2 text-base font-medium transition-colors"
+                >
+                  Producto
+                </Link>
+                <Link
+                  href="#"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="block text-[#121212] hover:text-[#5db815] py-2 text-base font-medium transition-colors"
+                >
+                  Recursos
+                </Link>
+                <Link
+                  href="#"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="block text-[#121212] hover:text-[#5db815] py-2 text-base font-medium transition-colors"
+                >
+                  Precios
+                </Link>
+                <Link
+                  href="#"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="block text-[#121212] hover:text-[#5db815] py-2 text-base font-medium transition-colors"
+                >
+                  Clientes
+                </Link>
+                <Link
+                  href="#"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="block text-[#121212] hover:text-[#5db815] py-2 text-base font-medium transition-colors"
+                >
+                  Contacto
+                </Link>
+                <div className="pt-4 border-t border-gray-200 space-y-3">
+                  <Link
+                    href="/inicia-sesion"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="block text-[#121212] hover:text-[#5db815] py-2 text-base font-medium transition-colors"
+                  >
+                    Inicia sesión
+                  </Link>
+                  <Link
+                    href="/registrarte"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="block bg-[#5db815] text-white text-center py-3 rounded-lg text-base font-medium hover:bg-[#4a9a11] transition-colors"
+                  >
+                    Registrarte
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Hero Section */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-32 pb-32">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-32 pb-16 sm:pb-32">
         <div className="text-center">
-          <h1 className="text-6xl font-bold text-[#242424] sm:text-7xl mb-6">
+          <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-[#242424] mb-4 sm:mb-6">
             CoperniGeo es una herramienta diseñada para monitorear y optimizar cultivos.
           </h1>
-          <p className="mt-6 text-xl text-[#898989] max-w-3xl mx-auto">
+          <p className="mt-4 sm:mt-6 text-base sm:text-lg md:text-xl text-[#898989] max-w-3xl mx-auto px-2">
             Conoce el sistema para el monitoreo agrícola moderno. Optimiza el seguimiento de áreas, proyectos y análisis de cultivos mediante imágenes satelitales.
           </p>
-          <div className="mt-10 flex justify-center items-center space-x-4">
+          <div className="mt-8 sm:mt-10 flex flex-col sm:flex-row justify-center items-center gap-3 sm:gap-4 sm:space-x-0">
             <Link
               href="/registrarte"
-              className="bg-white text-[#242424] px-8 py-3 rounded-lg text-lg font-semibold hover:bg-gray-100 transition-colors"
+              className="w-full sm:w-auto bg-white text-[#242424] px-6 sm:px-8 py-2.5 sm:py-3 rounded-lg text-base sm:text-lg font-semibold hover:bg-gray-100 transition-colors"
             >
               Comenzar Gratis
             </Link>
             <Link
               href="/inicia-sesion"
-              className="text-[#242424] px-8 py-3 rounded-lg text-lg font-semibold hover:text-[#5db815] transition-colors"
+              className="w-full sm:w-auto text-[#242424] px-6 sm:px-8 py-2.5 sm:py-3 rounded-lg text-base sm:text-lg font-semibold hover:text-[#5db815] transition-colors"
             >
               Inicia sesión
             </Link>
@@ -266,9 +424,24 @@ export default function Home() {
         </div>
 
         {/* Dashboard Preview */}
-        <div className="mt-24 flex justify-center items-center gap-8 max-w-7xl mx-auto" style={{ perspective: '1000px' }}>
-          {/* Left Dashboard Preview */}
-          <div className="flex-1 max-w-[48%]" style={{ perspective: '1000px' }}>
+        <div className="mt-24 max-w-7xl mx-auto">
+          {/* Mobile Carousel */}
+          <div className="md:hidden relative">
+            <div 
+              ref={carouselRef}
+              className="overflow-x-auto snap-x snap-mandatory scrollbar-hide -mx-4 px-4 flex gap-4"
+              style={{ 
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none',
+                WebkitOverflowScrolling: 'touch',
+                overscrollBehaviorX: 'contain',
+                overscrollBehaviorY: 'auto',
+                touchAction: 'pan-x pan-y',
+                willChange: 'scroll-position'
+              }}
+            >
+              {/* Left Dashboard Preview - Mobile */}
+              <div className="w-[calc(100vw-2rem)] flex-shrink-0 snap-center" style={{ perspective: '1000px' }}>
             <div className="bg-gray-800 rounded-lg shadow-2xl overflow-hidden border border-gray-700" style={{ 
               transform: 'perspective(1000px) rotateY(6deg) rotateX(0deg) scale(1.02)',
               transformStyle: 'preserve-3d'
@@ -364,10 +537,10 @@ export default function Home() {
                 </div>
               </div>
             </div>
-          </div>
+              </div>
 
-          {/* Right Dashboard Preview - Satellite Analysis */}
-          <div className="flex-1 max-w-[48%]" style={{ perspective: '1000px' }}>
+              {/* Right Dashboard Preview - Mobile */}
+              <div className="w-[calc(100vw-2rem)] flex-shrink-0 snap-center" style={{ perspective: '1000px' }}>
             <div className="bg-gray-800 rounded-lg shadow-2xl overflow-hidden border border-gray-700" style={{ 
               transform: 'perspective(1000px) rotateY(-6deg) rotateX(0deg) scale(1.02)',
               transformStyle: 'preserve-3d'
@@ -490,16 +663,251 @@ export default function Home() {
                 </div>
               </div>
             </div>
+              </div>
+            </div>
+            {/* Carousel Indicators */}
+            <div className="flex justify-center gap-2 mt-6">
+              <div className="w-2 h-2 rounded-full bg-[#5db815]"></div>
+              <div className="w-2 h-2 rounded-full bg-gray-300"></div>
+            </div>
+          </div>
+
+          {/* Desktop Side-by-Side Layout */}
+          <div className="hidden md:flex justify-center items-center gap-8" style={{ perspective: '1000px' }}>
+            {/* Left Dashboard Preview */}
+            <div className="flex-1 max-w-[48%]" style={{ perspective: '1000px' }}>
+              <div className="bg-gray-800 rounded-lg shadow-2xl overflow-hidden border border-gray-700" style={{ 
+                transform: 'perspective(1000px) rotateY(6deg) rotateX(0deg) scale(1.02)',
+                transformStyle: 'preserve-3d'
+              }}>
+                {/* Mock Dashboard Header */}
+                <div className="bg-gray-800 border-b border-gray-700 px-4 py-3 flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-2.5 h-2.5 rounded-full bg-red-500"></div>
+                    <div className="w-2.5 h-2.5 rounded-full bg-yellow-500"></div>
+                    <div className="w-2.5 h-2.5 rounded-full bg-[#5db815]"></div>
+                  </div>
+                  <div className="text-gray-400 text-xs">copernigeo.com/dashboard</div>
+                </div>
+
+                {/* Mock Dashboard Content */}
+                <div className="flex">
+                  {/* Sidebar */}
+                  <div className="w-48 bg-gray-900 border-r border-gray-700 p-4">
+                    <h2 className="text-lg font-bold text-[#5db815] mb-4">CoperniGeo</h2>
+                    <nav className="space-y-1.5">
+                      <div className="px-3 py-1.5 text-[#5db815] bg-[#5db815]/10 rounded-md text-xs font-medium">
+                        Inicio
+                      </div>
+                      <div className="px-3 py-1.5 text-gray-400 hover:text-[#5db815] rounded-md text-xs font-medium cursor-pointer">
+                        Imágenes
+                      </div>
+                      <div className="px-3 py-1.5 text-gray-400 hover:text-[#5db815] rounded-md text-xs font-medium cursor-pointer">
+                        Automatizar reportes
+                      </div>
+                      <div className="px-3 py-1.5 text-gray-400 hover:text-[#5db815] rounded-md text-xs font-medium cursor-pointer">
+                        Planes
+                      </div>
+                      <div className="px-3 py-1.5 text-gray-400 hover:text-[#5db815] rounded-md text-xs font-medium cursor-pointer">
+                        Cuenta
+                      </div>
+                    </nav>
+                  </div>
+
+                  {/* Main Content Area */}
+                  <div className="flex-1 bg-gray-50 p-6">
+                    <div className="mb-4">
+                      <h3 className="text-xl font-bold text-gray-900 mb-1">
+                        Bienvenido a CoperniGeo
+                      </h3>
+                      <p className="text-sm text-gray-600">
+                        Monitorea tus cultivos mediante imágenes satelitales
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      <div className="bg-white rounded-lg p-3 border border-gray-200">
+                        <div className="text-xs text-gray-500 mb-1">Áreas monitoreadas</div>
+                        <div className="text-xl font-bold text-gray-900">3</div>
+                      </div>
+                      <div className="bg-white rounded-lg p-3 border border-gray-200">
+                        <div className="text-xs text-gray-500 mb-1">Reportes activos</div>
+                        <div className="text-xl font-bold text-gray-900">5</div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-lg p-4 border border-gray-200">
+                      <h4 className="font-semibold text-sm text-gray-900 mb-3">Áreas recientes</h4>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between py-1.5 border-b border-gray-100">
+                          <div>
+                            <div className="font-medium text-sm text-gray-900">Campo Norte</div>
+                            <div className="text-xs text-gray-500">Última actualización: hace 2 días</div>
+                          </div>
+                          <div className="px-2 py-0.5 bg-[#5db815]/20 text-[#4a9a11] rounded-full text-xs font-medium">
+                            NDVI: 0.72
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between py-1.5 border-b border-gray-100">
+                          <div>
+                            <div className="font-medium text-sm text-gray-900">Campo Sur</div>
+                            <div className="text-xs text-gray-500">Última actualización: hace 5 días</div>
+                          </div>
+                          <div className="px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full text-xs font-medium">
+                            NDVI: 0.58
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between py-1.5">
+                          <div>
+                            <div className="font-medium text-sm text-gray-900">Campo Este</div>
+                            <div className="text-xs text-gray-500">Última actualización: hace 1 semana</div>
+                          </div>
+                          <div className="px-2 py-0.5 bg-[#5db815]/20 text-[#4a9a11] rounded-full text-xs font-medium">
+                            NDVI: 0.81
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Dashboard Preview - Desktop */}
+            <div className="flex-1 max-w-[48%]" style={{ perspective: '1000px' }}>
+              <div className="bg-gray-800 rounded-lg shadow-2xl overflow-hidden border border-gray-700" style={{ 
+                transform: 'perspective(1000px) rotateY(-6deg) rotateX(0deg) scale(1.02)',
+                transformStyle: 'preserve-3d'
+              }}>
+                {/* Analysis Header */}
+                <div className="bg-gray-800 border-b border-gray-700 px-4 py-3 flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-2.5 h-2.5 rounded-full bg-red-500"></div>
+                    <div className="w-2.5 h-2.5 rounded-full bg-yellow-500"></div>
+                    <div className="w-2.5 h-2.5 rounded-full bg-[#5db815]"></div>
+                  </div>
+                  <div className="text-gray-400 text-xs">copernigeo.com/analisis</div>
+                </div>
+
+                {/* Analysis Content */}
+                <div className="flex">
+                  {/* Sidebar */}
+                  <div className="w-48 bg-gray-900 border-r border-gray-700 p-4">
+                    <h2 className="text-lg font-bold text-[#5db815] mb-4">CoperniGeo</h2>
+                    <nav className="space-y-1.5">
+                      <div className="px-3 py-1.5 text-gray-400 hover:text-[#5db815] rounded-md text-xs font-medium cursor-pointer">
+                        Inicio
+                      </div>
+                      <div className="px-3 py-1.5 text-[#5db815] bg-[#5db815]/10 rounded-md text-xs font-medium">
+                        Imágenes
+                      </div>
+                      <div className="px-3 py-1.5 text-gray-400 hover:text-[#5db815] rounded-md text-xs font-medium cursor-pointer">
+                        Automatizar reportes
+                      </div>
+                      <div className="px-3 py-1.5 text-gray-400 hover:text-[#5db815] rounded-md text-xs font-medium cursor-pointer">
+                        Planes
+                      </div>
+                      <div className="px-3 py-1.5 text-gray-400 hover:text-[#5db815] rounded-md text-xs font-medium cursor-pointer">
+                        Cuenta
+                      </div>
+                    </nav>
+                  </div>
+
+                  {/* Main Content Area */}
+                  <div className="flex-1 bg-gray-50 p-6">
+                    <div className="mb-4">
+                      <h3 className="text-xl font-bold text-gray-900 mb-1">
+                        Campo Norte
+                      </h3>
+                      <p className="text-sm text-gray-600">
+                        Análisis NDVI - 15 Dic 2024
+                      </p>
+                    </div>
+
+                    {/* Satellite Image with NDVI Overlay */}
+                    <div className="relative h-48 bg-gradient-to-br from-green-600 via-green-400 to-yellow-300 rounded-lg overflow-hidden mb-4 border border-gray-200">
+                      {/* Simulated satellite imagery with NDVI colors */}
+                      <div className="absolute inset-0">
+                        {/* Green areas (healthy vegetation) */}
+                        <div className="absolute top-0 left-0 w-1/3 h-2/3 bg-gradient-to-br from-green-600 to-green-500 opacity-80"></div>
+                        <div className="absolute top-1/4 right-1/4 w-1/4 h-1/3 bg-green-500 opacity-70"></div>
+                        {/* Yellow areas (moderate vegetation) */}
+                        <div className="absolute bottom-0 right-0 w-2/5 h-1/3 bg-gradient-to-tl from-yellow-400 to-yellow-300 opacity-75"></div>
+                        <div className="absolute top-1/2 left-1/2 w-1/5 h-1/4 bg-yellow-400 opacity-60"></div>
+                        {/* Red areas (low vegetation) */}
+                        <div className="absolute bottom-1/4 left-1/3 w-1/6 h-1/5 bg-red-400 opacity-50"></div>
+                        {/* Grid overlay for satellite look */}
+                        <div className="absolute inset-0" style={{
+                          backgroundImage: 'linear-gradient(rgba(0,0,0,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.1) 1px, transparent 1px)',
+                          backgroundSize: '20px 20px'
+                        }}></div>
+                      </div>
+                      
+                      {/* NDVI Legend */}
+                      <div className="absolute bottom-2 left-2 bg-white/90 backdrop-blur-sm rounded px-2 py-1.5 shadow-lg">
+                        <div className="text-xs font-semibold text-gray-900 mb-1">NDVI</div>
+                        <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-0.5">
+                            <div className="w-2.5 h-2.5 bg-red-500 rounded"></div>
+                            <span className="text-xs text-gray-600">0.0-0.3</span>
+                          </div>
+                          <div className="flex items-center gap-0.5">
+                            <div className="w-2.5 h-2.5 bg-yellow-400 rounded"></div>
+                            <span className="text-xs text-gray-600">0.3-0.6</span>
+                          </div>
+                          <div className="flex items-center gap-0.5">
+                            <div className="w-2.5 h-2.5 bg-green-500 rounded"></div>
+                            <span className="text-xs text-gray-600">0.6-1.0</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-lg p-4 border border-gray-200">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-semibold text-sm text-gray-900">Análisis NDVI</h4>
+                        <div className="px-2 py-0.5 bg-[#5db815]/20 text-[#4a9a11] rounded-full text-xs font-medium">
+                          NDVI: 0.72
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                            <span className="text-xs text-gray-700">Alta (0.6-1.0)</span>
+                          </div>
+                          <span className="text-xs font-medium text-gray-900">68%</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
+                            <span className="text-xs text-gray-700">Media (0.3-0.6)</span>
+                          </div>
+                          <span className="text-xs font-medium text-gray-900">26%</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-red-400 rounded-full"></div>
+                            <span className="text-xs text-gray-700">Baja (0.0-0.3)</span>
+                          </div>
+                          <span className="text-xs font-medium text-gray-900">6%</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Feature Cards Section */}
-        <div className="mt-32 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
+        <div className="mt-16 sm:mt-24 md:mt-32 grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 max-w-6xl mx-auto px-4 sm:px-0">
           {features.map((feature) => (
             <button
               key={feature.id}
               onClick={() => setSelectedFeature(feature.id)}
-              className="bg-white rounded-2xl p-8 transition-all text-left group relative overflow-hidden aspect-square flex flex-col hover:bg-gray-50 border border-gray-200 shadow-lg shadow-gray-200/50 hover:border-gray-300 hover:shadow-xl hover:shadow-gray-300/50"
+              className="bg-white rounded-2xl p-6 sm:p-8 transition-all text-left group relative overflow-hidden aspect-square flex flex-col hover:bg-gray-50 border border-gray-200 shadow-lg shadow-gray-200/50 hover:border-gray-300 hover:shadow-xl hover:shadow-gray-300/50"
             >
               {/* Subtle inner glow effect */}
               <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-gray-100/50 via-transparent to-transparent opacity-50 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
@@ -518,20 +926,20 @@ export default function Home() {
         </div>
 
         {/* Additional Content Section 1 */}
-        <div className="mt-32 max-w-6xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+        <div className="mt-16 sm:mt-24 md:mt-32 max-w-6xl mx-auto px-4 sm:px-0">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 sm:gap-12 items-center">
             <div>
-              <h2 className="text-5xl font-bold text-[#242424] mb-6">
+              <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-[#242424] mb-4 sm:mb-6">
                 Monitoreo en tiempo real
               </h2>
-              <p className="text-xl text-[#898989] leading-relaxed mb-6">
+              <p className="text-base sm:text-lg md:text-xl text-[#898989] leading-relaxed mb-4 sm:mb-6">
                 Obtén actualizaciones automáticas sobre el estado de tus cultivos cada 5 días. Nuestro sistema procesa imágenes satelitales de Copernicus Sentinel-2 para proporcionarte datos precisos y actualizados.
               </p>
-              <p className="text-lg text-[#898989]">
+              <p className="text-sm sm:text-base md:text-lg text-[#898989]">
                 Detecta problemas antes de que se vuelvan críticos. Monitorea el crecimiento, identifica áreas de estrés hídrico y optimiza el uso de recursos agrícolas con datos basados en evidencia.
               </p>
             </div>
-            <div className="bg-white rounded-2xl p-8 border border-gray-200 shadow-lg">
+            <div className="bg-white rounded-2xl p-6 sm:p-8 border border-gray-200 shadow-lg">
               <div className="space-y-4">
                 <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                   <span className="text-gray-700">Actualización automática</span>
@@ -551,11 +959,11 @@ export default function Home() {
         </div>
 
         {/* Additional Content Section 2 */}
-        <div className="mt-32 max-w-6xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+        <div className="mt-16 sm:mt-24 md:mt-32 max-w-6xl mx-auto px-4 sm:px-0">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 sm:gap-12 items-center">
             <div className="order-2 md:order-1">
-              <div className="bg-white rounded-2xl p-8 border border-gray-200 shadow-lg">
-                <div className="space-y-6">
+              <div className="bg-white rounded-2xl p-6 sm:p-8 border border-gray-200 shadow-lg">
+                <div className="space-y-4 sm:space-y-6">
                   <div>
                     <div className="text-sm text-gray-600 mb-2">Índice NDVI</div>
                     <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
@@ -581,13 +989,13 @@ export default function Home() {
               </div>
             </div>
             <div className="order-1 md:order-2">
-              <h2 className="text-5xl font-bold text-[#242424] mb-6">
+              <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-[#242424] mb-4 sm:mb-6">
                 Análisis de índices de vegetación
               </h2>
-              <p className="text-xl text-[#898989] leading-relaxed mb-6">
+              <p className="text-base sm:text-lg md:text-xl text-[#898989] leading-relaxed mb-4 sm:mb-6">
                 Calcula automáticamente NDVI, NDRE y EVI para cada área monitoreada. Visualiza la salud de tus cultivos con mapas de calor y gráficos de tendencias.
               </p>
-              <p className="text-lg text-[#898989]">
+              <p className="text-sm sm:text-base md:text-lg text-[#898989]">
                 Compara el rendimiento entre diferentes campos y períodos. Identifica patrones y toma decisiones informadas basadas en datos científicos precisos.
               </p>
             </div>
@@ -595,21 +1003,21 @@ export default function Home() {
         </div>
 
         {/* Quote Section */}
-        <div className="mt-24 max-w-4xl mx-auto text-center">
-          <div className="bg-white rounded-2xl p-12 border border-gray-200 shadow-lg">
-            <svg className="w-12 h-12 text-[#5db815] mx-auto mb-6" fill="currentColor" viewBox="0 0 24 24">
+        <div className="mt-16 sm:mt-24 max-w-4xl mx-auto text-center px-4 sm:px-0">
+          <div className="bg-white rounded-2xl p-6 sm:p-8 md:p-12 border border-gray-200 shadow-lg">
+            <svg className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-[#5db815] mx-auto mb-4 sm:mb-6" fill="currentColor" viewBox="0 0 24 24">
               <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.996 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.984zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/>
             </svg>
-            <blockquote className="text-2xl font-semibold text-[#242424] mb-6 leading-relaxed">
+            <blockquote className="text-lg sm:text-xl md:text-2xl font-semibold text-[#242424] mb-4 sm:mb-6 leading-relaxed px-2">
               &ldquo;CoperniGeo ha transformado la forma en que monitoreamos nuestros cultivos. Los datos satelitales nos permiten tomar decisiones informadas y optimizar nuestra producción agrícola de manera nunca antes posible.&rdquo;
             </blockquote>
-            <div className="flex items-center justify-center space-x-4">
-              <div className="w-12 h-12 bg-[#5db815]/20 rounded-full flex items-center justify-center">
-                <span className="text-[#5db815] font-bold text-lg">JM</span>
+            <div className="flex items-center justify-center space-x-3 sm:space-x-4">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[#5db815]/20 rounded-full flex items-center justify-center">
+                <span className="text-[#5db815] font-bold text-base sm:text-lg">JM</span>
               </div>
               <div className="text-left">
-                <div className="text-[#242424] font-semibold">Juan Martínez</div>
-                <div className="text-[#898989] text-sm">Agricultor, Agrícola del Valle</div>
+                <div className="text-[#242424] font-semibold text-sm sm:text-base">Juan Martínez</div>
+                <div className="text-[#898989] text-xs sm:text-sm">Agricultor, Agrícola del Valle</div>
               </div>
             </div>
           </div>
@@ -620,26 +1028,26 @@ export default function Home() {
       <footer className="bg-[#f4f3f4] border-t border-gray-300 -mt-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
           {/* CTA Section */}
-          <div className="pb-16 mb-16 border-b border-gray-800">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
+          <div className="pb-12 sm:pb-16 mb-12 sm:mb-16 border-b border-gray-800">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 sm:gap-8">
               <div className="flex-1">
-              <h2 className="text-4xl font-bold text-[#242424] mb-4">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-[#242424] mb-3 sm:mb-4">
                 ¿Listo para comenzar?
               </h2>
-                <p className="text-xl text-[#898989]">
+                <p className="text-base sm:text-lg md:text-xl text-[#898989]">
                 Únete a agricultores y profesionales agrícolas que ya están optimizando sus cultivos con CoperniGeo.
               </p>
               </div>
-              <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full sm:w-auto">
                 <Link
                   href="/registrarte"
-                  className="bg-[#5db815] text-white px-8 py-3 rounded-lg text-lg font-semibold hover:bg-[#4a9a11] transition-colors whitespace-nowrap"
+                  className="bg-[#5db815] text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-lg text-base sm:text-lg font-semibold hover:bg-[#4a9a11] transition-colors whitespace-nowrap text-center"
                 >
                   Comenzar gratis
                 </Link>
                 <Link
                   href="/inicia-sesion"
-                  className="bg-white text-[#242424] border border-gray-300 px-8 py-3 rounded-lg text-lg font-semibold hover:bg-gray-50 hover:border-gray-400 transition-colors whitespace-nowrap"
+                  className="bg-white text-[#242424] border border-gray-300 px-6 sm:px-8 py-2.5 sm:py-3 rounded-lg text-base sm:text-lg font-semibold hover:bg-gray-50 hover:border-gray-400 transition-colors whitespace-nowrap text-center"
                 >
                   Contactar ventas
                 </Link>
@@ -648,10 +1056,10 @@ export default function Home() {
           </div>
 
           {/* Footer Links */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-8">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-6 sm:gap-8">
             {/* Features */}
             <div>
-              <img src="/logo.svg" alt="CoperniGeo" className="h-40 w-auto mb-6" />
+              <img src="/logo.svg" alt="CoperniGeo" className="h-24 sm:h-32 md:h-40 w-auto mb-4 sm:mb-6" />
             </div>
 
             {/* Product */}

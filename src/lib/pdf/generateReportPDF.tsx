@@ -1,5 +1,5 @@
 import React from "react";
-import ReactPDF from "@react-pdf/renderer";
+import { renderToBuffer } from "@react-pdf/renderer";
 import { ReportPDF } from "./reportTemplate";
 import { IndexType } from "@/types/report";
 import { Report } from "@/types/report";
@@ -82,8 +82,8 @@ export async function generateReportPDF(
     />
   );
   
-  // Render to buffer
-  const pdfBuffer = await ReactPDF.renderToBuffer(pdfDoc);
+  // Render to buffer using the correct import
+  const pdfBuffer = await renderToBuffer(pdfDoc);
   return Buffer.from(pdfBuffer);
 }
 
