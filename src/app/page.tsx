@@ -500,7 +500,7 @@ export default function Home() {
           <div className="grid grid-cols-2 md:grid-cols-5 gap-8">
             {/* Features */}
             <div>
-              <div className="w-6 h-6 bg-[#5db815] rounded-full mb-6"></div>
+              <img src="/logo.svg" alt="CoperniGeo" className="h-40 w-auto mb-6" />
             </div>
 
             {/* Product */}
