@@ -115,12 +115,12 @@ export default function ImagenesPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold text-gray-900">Imágenes Satelitales</h1>
+      <h1 className="text-3xl font-bold text-[#242424]">Imágenes Satelitales</h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Map and Controls */}
         <div className="lg:col-span-2 space-y-4">
-          <div className="bg-white rounded-lg shadow-md p-4">
+          <div className="bg-white rounded-lg shadow-md p-4 border border-gray-200">
             <InteractiveMap
               onPolygonComplete={handlePolygonComplete}
               areas={areas}
@@ -130,7 +130,7 @@ export default function ImagenesPage() {
             />
           </div>
 
-          <div className="bg-white rounded-lg shadow-md p-4">
+          <div className="bg-white rounded-lg shadow-md p-4 border border-gray-200">
             <MapControls
               onLoadImage={handleLoadImage}
               areas={areas}
@@ -142,26 +142,26 @@ export default function ImagenesPage() {
           </div>
 
           {imageDataList.length > 0 && (
-            <div className="bg-white rounded-lg shadow-md p-4">
-              <h3 className="text-lg font-semibold text-gray-900 mb-3">
+            <div className="bg-white rounded-lg shadow-md p-4 border border-gray-200">
+              <h3 className="text-lg font-semibold text-[#242424] mb-3">
                 Estadísticas de Imágenes
               </h3>
               <div className="space-y-4">
                 {imageDataList.map((imageData, index) => (
                   <div key={index} className="border-b border-gray-200 last:border-b-0 pb-3 last:pb-0">
-                    <h4 className="font-medium text-gray-800 mb-2">{imageData.indexType}</h4>
-                    <div className="space-y-1 text-sm">
+                    <h4 className="font-medium text-[#242424] mb-2">{imageData.indexType}</h4>
+                    <div className="space-y-1 text-sm text-[#898989]">
                       <p>
-                        <strong>Valor mínimo:</strong> {imageData.minValue.toFixed(3)}
+                        <strong className="text-[#242424]">Valor mínimo:</strong> {imageData.minValue.toFixed(3)}
                       </p>
                       <p>
-                        <strong>Valor máximo:</strong> {imageData.maxValue.toFixed(3)}
+                        <strong className="text-[#242424]">Valor máximo:</strong> {imageData.maxValue.toFixed(3)}
                       </p>
                       <p>
-                        <strong>Valor promedio:</strong> {imageData.meanValue.toFixed(3)}
+                        <strong className="text-[#242424]">Valor promedio:</strong> {imageData.meanValue.toFixed(3)}
                       </p>
                       <p>
-                        <strong>Fecha:</strong> {new Date(imageData.date).toLocaleDateString("es-MX")}
+                        <strong className="text-[#242424]">Fecha:</strong> {new Date(imageData.date).toLocaleDateString("es-MX")}
                       </p>
                     </div>
                   </div>
@@ -173,7 +173,7 @@ export default function ImagenesPage() {
 
         {/* Area Manager Sidebar */}
         <div className="lg:col-span-1">
-          <div className="bg-white rounded-lg shadow-md p-4 sticky top-4">
+          <div className="bg-white rounded-lg shadow-md p-4 sticky top-4 border border-gray-200">
             <AreaManager
               onAreaSelect={setSelectedAreaId}
               selectedAreaId={selectedAreaId}

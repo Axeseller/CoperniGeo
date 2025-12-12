@@ -164,18 +164,18 @@ export default function ReportConfig({ onSave, initialData }: ReportConfigProps)
       )}
 
       {successMessage && (
-        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded">
+        <div className="bg-[#5db815]/10 border border-[#5db815]/30 text-[#5db815] px-4 py-3 rounded">
           {successMessage}
         </div>
       )}
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-medium text-[#242424] mb-2">
           Áreas *
         </label>
         <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded p-2">
           {areas.length === 0 ? (
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-[#898989]">
               No hay áreas disponibles. Crea áreas primero en la sección de Imágenes.
             </p>
           ) : (
@@ -185,9 +185,9 @@ export default function ReportConfig({ onSave, initialData }: ReportConfigProps)
                   type="checkbox"
                   checked={formData.areaIds.includes(area.id || "")}
                   onChange={() => area.id && toggleArea(area.id)}
-                  className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                  className="rounded border-gray-300 text-[#5db815] focus:ring-[#5db815]"
                 />
-                <span className="text-sm text-gray-700">{area.name}</span>
+                <span className="text-sm text-[#242424]">{area.name}</span>
               </label>
             ))
           )}
@@ -195,7 +195,7 @@ export default function ReportConfig({ onSave, initialData }: ReportConfigProps)
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-medium text-[#242424] mb-2">
           Índices *
         </label>
         <div className="space-y-2">
@@ -205,16 +205,16 @@ export default function ReportConfig({ onSave, initialData }: ReportConfigProps)
                 type="checkbox"
                 checked={formData.indices.includes(index)}
                 onChange={() => toggleIndex(index)}
-                className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                className="rounded border-gray-300 text-[#5db815] focus:ring-[#5db815]"
               />
-              <span className="text-sm text-gray-700">{index}</span>
+              <span className="text-sm text-[#242424]">{index}</span>
             </label>
           ))}
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-[#242424] mb-1">
           Cobertura de nubes: {formData.cloudCoverage}%
         </label>
         <input
@@ -230,7 +230,7 @@ export default function ReportConfig({ onSave, initialData }: ReportConfigProps)
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-[#242424] mb-1">
           Frecuencia *
         </label>
         <select
@@ -238,7 +238,7 @@ export default function ReportConfig({ onSave, initialData }: ReportConfigProps)
           onChange={(e) =>
             setFormData((prev) => ({ ...prev, frequency: e.target.value as ReportFrequency }))
           }
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-[#5db815] focus:border-[#5db815] bg-gray-50 text-[#242424]"
         >
           <option value="3days">Cada 3 días</option>
           <option value="5days">Cada 5 días</option>
@@ -248,7 +248,7 @@ export default function ReportConfig({ onSave, initialData }: ReportConfigProps)
       </div>
 
       <div>
-        <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="email" className="block text-sm font-medium text-[#242424] mb-1">
           Email para recibir reportes *
         </label>
         <input
@@ -258,7 +258,7 @@ export default function ReportConfig({ onSave, initialData }: ReportConfigProps)
           onChange={(e) =>
             setFormData((prev) => ({ ...prev, email: e.target.value }))
           }
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-[#5db815] focus:border-[#5db815] bg-gray-50 text-[#242424] placeholder-gray-400"
           required
         />
       </div>
@@ -266,7 +266,7 @@ export default function ReportConfig({ onSave, initialData }: ReportConfigProps)
       <button
         type="submit"
         disabled={loading}
-        className="w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50"
+        className="w-full bg-[#5db815] text-white px-4 py-2 rounded-lg hover:bg-[#4a9a11] disabled:opacity-50 transition-colors"
       >
         {loading ? "Guardando..." : initialData ? "Actualizar Reporte" : "Crear Reporte"}
       </button>

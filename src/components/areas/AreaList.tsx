@@ -20,9 +20,9 @@ export default function AreaList({
 }: AreaListProps) {
   if (areas.length === 0) {
     return (
-      <div className="text-center text-gray-500 py-4">
+      <div className="text-center text-[#898989] py-4">
         <p className="text-sm">No hay áreas guardadas</p>
-        <p className="text-xs mt-1 text-gray-400">Dibuja un polígono en el mapa para crear una</p>
+        <p className="text-xs mt-1 text-[#898989]">Dibuja un polígono en el mapa para crear una</p>
       </div>
     );
   }
@@ -34,15 +34,15 @@ export default function AreaList({
           key={area.id}
           className={`p-3 border rounded-lg cursor-pointer transition-colors ${
             selectedAreaId === area.id
-              ? "border-green-600 bg-green-50"
+              ? "border-[#5db815] bg-[#5db815]/10"
               : "border-gray-200 hover:border-gray-300"
           }`}
           onClick={() => area.id && onSelect(area.id)}
         >
           <div className="flex justify-between items-start">
             <div className="flex-1">
-              <h4 className="font-medium text-gray-900">{area.name}</h4>
-              <p className="text-sm text-gray-500">
+              <h4 className="font-medium text-[#242424]">{area.name}</h4>
+              <p className="text-sm text-[#898989]">
                 {area.coordinates?.length || 0} puntos
               </p>
               {area.coordinates && area.coordinates.length >= 3 && (() => {
@@ -53,10 +53,10 @@ export default function AreaList({
                 }));
                 const areaCalculation = formatArea(normalizedCoords);
                 return (
-                  <div className="mt-1 text-xs text-gray-600">
+                  <div className="mt-1 text-xs text-[#898989]">
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{areaCalculation.km2} km²</span>
-                      <span className="text-gray-400">•</span>
+                      <span className="text-[#898989]">•</span>
                       <span className="font-medium">{areaCalculation.hectares} ha</span>
                     </div>
                   </div>

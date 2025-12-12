@@ -142,6 +142,7 @@ export const ReportPDF: React.FC<ReportPDFProps> = ({ report, imageData, reportD
             </Text>
             {data.imageUrl && (
               <View style={styles.imageContainer}>
+                {/* eslint-disable-next-line jsx-a11y/alt-text */}
                 <Image src={data.imageUrl} style={styles.image} />
               </View>
             )}

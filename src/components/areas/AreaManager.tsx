@@ -148,7 +148,7 @@ export default function AreaManager({
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold text-gray-900">Áreas</h3>
+        <h3 className="text-lg font-semibold text-[#242424]">Áreas</h3>
         {!showForm && (
           <button
             onClick={() => {
@@ -156,7 +156,7 @@ export default function AreaManager({
               setEditingArea(null);
               setFormCoordinates(undefined);
             }}
-            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-sm"
+            className="bg-[#5db815] text-white px-4 py-2 rounded-lg hover:bg-[#4a9a11] text-sm transition-colors"
           >
             Nueva Área
           </button>
@@ -164,7 +164,7 @@ export default function AreaManager({
       </div>
 
       {loading && areas.length === 0 && (
-        <div className="text-center py-2 text-sm text-gray-500">
+        <div className="text-center py-2 text-sm text-[#898989]">
           Cargando áreas...
         </div>
       )}

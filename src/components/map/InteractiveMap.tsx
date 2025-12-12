@@ -147,12 +147,13 @@ export default function InteractiveMap({
 
     return () => {
       // Cleanup on unmount
+      const currentOverlays = overlaysRef.current;
       if (map) {
         while (map.overlayMapTypes.getLength() > 0) {
           map.overlayMapTypes.removeAt(0);
         }
       }
-      overlaysRef.current.clear();
+      currentOverlays.clear();
     };
   }, [map, imageDataList, visibleIndices]);
 
@@ -274,9 +275,9 @@ export default function InteractiveMap({
               onClick={() => toggleIndexVisibility(imageData.indexType)}
               className={`px-4 py-2 rounded text-sm font-medium shadow-lg ${
                 isVisible
-                  ? "bg-green-600 text-white"
-                  : "bg-white text-gray-700 border border-gray-300"
-              } hover:bg-green-700 hover:text-white transition-colors`}
+                  ? "bg-[#5db815] text-white"
+                  : "bg-white text-[#242424] border border-gray-300"
+              } hover:bg-[#4a9a11] hover:text-white transition-colors`}
             >
               {isVisible ? `Ocultar ${imageData.indexType}` : `Mostrar ${imageData.indexType}`}
             </button>
@@ -295,7 +296,7 @@ export default function InteractiveMap({
       {/* Color Legend */}
       {visibleIndices.size > 0 && (
         <div className="absolute bottom-4 left-4 bg-white p-3 rounded-lg shadow-lg border border-gray-200 max-w-xs">
-          <h4 className="text-sm font-semibold text-gray-900 mb-2">
+          <h4 className="text-sm font-semibold text-[#242424] mb-2">
             {visibleIndices.size === 1 ? "Índice Visible" : "Índices Visibles"}
           </h4>
           <div className="space-y-3">
@@ -303,7 +304,7 @@ export default function InteractiveMap({
               .filter((imageData) => visibleIndices.has(imageData.indexType))
               .map((imageData) => (
                 <div key={imageData.indexType} className="border-b border-gray-200 last:border-b-0 pb-2 last:pb-0">
-                  <p className="text-xs font-semibold text-gray-800 mb-1">{imageData.indexType}</p>
+                  <p className="text-xs font-semibold text-[#242424] mb-1">{imageData.indexType}</p>
                   <div className="flex items-center space-x-2">
                     <div
                       className={`h-3 rounded flex-1 ${
@@ -313,16 +314,16 @@ export default function InteractiveMap({
                       }`}
                     ></div>
                   </div>
-                  <div className="flex justify-between text-xs text-gray-600 mt-1">
+                  <div className="flex justify-between text-xs text-[#898989] mt-1">
                     <span>{imageData.minValue.toFixed(3)}</span>
                     <span>{imageData.maxValue.toFixed(3)}</span>
                   </div>
                 </div>
               ))}
-            <p className="text-xs text-gray-500 mt-2 pt-2 border-t border-gray-200">
+            <p className="text-xs text-[#898989] mt-2 pt-2 border-t border-gray-200">
               <span className="text-red-600">Rojo</span> = Bajo |{" "}
               <span className="text-yellow-600">Amarillo</span> = Medio |{" "}
-              <span className="text-green-600">Verde</span> = Alto
+              <span className="text-[#5db815]">Verde</span> = Alto
             </p>
           </div>
         </div>

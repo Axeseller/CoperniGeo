@@ -14,21 +14,21 @@ export default function CuentaPage() {
 
   return (
     <div className="max-w-4xl">
-      <h1 className="text-3xl font-bold text-gray-900 mb-6">Mi Cuenta</h1>
-      <div className="bg-white rounded-lg shadow-md p-6">
+      <h1 className="text-3xl font-bold text-[#242424] mb-6">Mi Cuenta</h1>
+      <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
         <div className="space-y-6">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">
+            <h2 className="text-lg font-semibold text-[#242424] mb-2">
               Información de la cuenta
             </h2>
-            <div className="bg-gray-50 rounded-md p-4">
-              <p className="text-sm text-gray-600 mb-1">Email:</p>
-              <p className="text-gray-900 font-medium">{user?.email}</p>
+            <div className="bg-gray-50 rounded-md p-4 border border-gray-200">
+              <p className="text-sm text-[#898989] mb-1">Email:</p>
+              <p className="text-[#242424] font-medium">{user?.email}</p>
             </div>
           </div>
 
           <div>
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">
+            <h2 className="text-lg font-semibold text-[#242424] mb-2">
               Acciones
             </h2>
             <button

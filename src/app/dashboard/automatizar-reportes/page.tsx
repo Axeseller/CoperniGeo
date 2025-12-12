@@ -49,8 +49,8 @@ export default function AutomatizarReportesPage() {
   if (loading) {
     return (
       <div className="max-w-4xl">
-        <h1 className="text-3xl font-bold text-gray-900 mb-6">Automatizar Reportes</h1>
-        <div className="text-center py-8">Cargando reportes...</div>
+        <h1 className="text-3xl font-bold text-[#242424] mb-6">Automatizar Reportes</h1>
+        <div className="text-center py-8 text-[#898989]">Cargando reportes...</div>
       </div>
     );
   }
@@ -58,14 +58,14 @@ export default function AutomatizarReportesPage() {
   return (
     <div className="max-w-4xl space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-900">Automatizar Reportes</h1>
+        <h1 className="text-3xl font-bold text-[#242424]">Automatizar Reportes</h1>
         {!showForm && (
           <button
             onClick={() => {
               setShowForm(true);
               setEditingReport(null);
             }}
-            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+            className="bg-[#5db815] text-white px-4 py-2 rounded-lg hover:bg-[#4a9a11] transition-colors"
           >
             Nuevo Reporte
           </button>
@@ -73,15 +73,15 @@ export default function AutomatizarReportesPage() {
       </div>
 
       {showForm ? (
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">
+        <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
+          <h2 className="text-xl font-semibold text-[#242424] mb-4">
             {editingReport ? "Editar Reporte" : "Crear Nuevo Reporte"}
           </h2>
           <ReportConfig onSave={handleSave} initialData={editingReport || undefined} />
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Reportes Configurados</h2>
+        <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
+          <h2 className="text-xl font-semibold text-[#242424] mb-4">Reportes Configurados</h2>
           <ReportList reports={reports} onUpdate={loadReports} onEdit={handleEdit} />
         </div>
       )}
