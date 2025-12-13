@@ -84,13 +84,21 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   imageContainer: {
-    marginTop: 10,
+    marginTop: 20,
     marginBottom: 10,
     alignItems: "center",
+    justifyContent: "center",
+    flex: 1,
   },
   image: {
-    maxWidth: "100%",
-    maxHeight: 300,
+    width: "100%",
+    maxHeight: 500,
+    objectFit: "contain",
+    // Lock aspect ratio - don't use auto to prevent very large images
+    // width: 100% with maxHeight ensures proper scaling while maintaining ratio
+  },
+  statsContainer: {
+    marginBottom: 20,
   },
   footer: {
     marginTop: 30,
@@ -102,14 +110,13 @@ const styles = StyleSheet.create({
 
 export const ReportPDF: React.FC<ReportPDFProps> = ({ report, imageData, reportDate }) => (
   <Document>
+    {/* First page: Cover/Summary */}
     <Page size="A4" style={styles.page}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Reporte de Monitoreo CoperniGeo</Text>
         <Text style={styles.subtitle}>Generado el {reportDate}</Text>
       </View>
 
-      {/* Report Configuration */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Configuración del Reporte</Text>
         <Text style={styles.configItem}>
@@ -123,39 +130,55 @@ export const ReportPDF: React.FC<ReportPDFProps> = ({ report, imageData, reportD
         </Text>
       </View>
 
-      {/* Results for each area/index */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Resultados</Text>
-        {imageData.map((data, index) => (
-          <View key={index} style={styles.areaSection}>
-            <Text style={styles.areaTitle}>
-              {data.areaName} - {data.indexType}
-            </Text>
-            <Text style={styles.statsText}>
-              <Text style={styles.statsLabel}>Mínimo:</Text> {data.stats.min.toFixed(3)}
-            </Text>
-            <Text style={styles.statsText}>
-              <Text style={styles.statsLabel}>Máximo:</Text> {data.stats.max.toFixed(3)}
-            </Text>
-            <Text style={styles.statsText}>
-              <Text style={styles.statsLabel}>Promedio:</Text> {data.stats.mean.toFixed(3)}
-            </Text>
-            {data.imageUrl && (
-              <View style={styles.imageContainer}>
-                {/* eslint-disable-next-line jsx-a11y/alt-text */}
-                <Image src={data.imageUrl} style={styles.image} />
-              </View>
-            )}
-          </View>
-        ))}
-      </View>
-
-      {/* Footer */}
       <View style={styles.footer}>
         <Text>Este es un reporte automático de CoperniGeo.</Text>
         <Text>Para modificar la configuración, visita tu dashboard.</Text>
       </View>
     </Page>
+
+    {/* One page per index with image */}
+    {imageData.map((data, index) => (
+      <Page key={index} size="A4" style={styles.page}>
+        <View style={styles.header}>
+          <Text style={styles.title}>{data.areaName}</Text>
+          <Text style={styles.subtitle}>{data.indexType}</Text>
+        </View>
+
+        <View style={styles.statsContainer}>
+          <Text style={styles.sectionTitle}>Estadísticas</Text>
+          <Text style={styles.statsText}>
+            <Text style={styles.statsLabel}>Mínimo:</Text> {data.stats.min.toFixed(3)}
+          </Text>
+          <Text style={styles.statsText}>
+            <Text style={styles.statsLabel}>Máximo:</Text> {data.stats.max.toFixed(3)}
+          </Text>
+          <Text style={styles.statsText}>
+            <Text style={styles.statsLabel}>Promedio:</Text> {data.stats.mean.toFixed(3)}
+          </Text>
+        </View>
+
+        {data.imageUrl && (
+          <View style={styles.imageContainer}>
+            {/* eslint-disable-next-line jsx-a11y/alt-text */}
+            <Image 
+              src={data.imageUrl} 
+              style={{
+                ...styles.image,
+                // Lock aspect ratio: use width 100% with maxHeight to maintain ratio
+                // This prevents distortion while handling large images
+                width: '100%',
+                maxHeight: 500,
+                objectFit: 'contain',
+              }}
+            />
+          </View>
+        )}
+
+        <View style={styles.footer}>
+          <Text>Página {index + 2} de {imageData.length + 1}</Text>
+        </View>
+      </Page>
+    ))}
   </Document>
 );
 

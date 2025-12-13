@@ -7,7 +7,8 @@ import { generateReportPDF } from "@/lib/pdf/generateReportPDF";
 import { IndexType } from "@/types/report";
 import { getFrequencyLabel } from "@/lib/utils/reports";
 import { calculatePolygonArea, squareMetersToKm } from "@/lib/utils/geometry";
-import { uploadFileAdmin } from "@/lib/storage/admin-upload";
+import { uploadImageWithDedup } from "@/lib/storage/admin-upload";
+import sharp from 'sharp';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120; // Allow up to 120 seconds for processing (reports may take longer)
@@ -196,11 +197,12 @@ export async function POST(
               console.log(`[Report Send] Found thumbnail URL for ${indexType}`);
             } else {
               // Try to generate thumbnail using getThumbURL if available
+              // Use larger dimensions and let Earth Engine maintain aspect ratio
               // Note: This might not be available in Node.js client
               if (typeof (clipped as any).getThumbURL === 'function') {
                 thumbnailUrl = await new Promise<string>((resolve, reject) => {
                   (clipped as any).getThumbURL({
-                    dimensions: [800, 600],
+                    dimensions: 1200, // Single dimension - Earth Engine will maintain aspect ratio
                     format: 'png',
                     region: polygon,
                     min: statsValue[`${indexType}_min`],
@@ -213,7 +215,7 @@ export async function POST(
                     else resolve(url);
                   });
                 });
-                console.log(`[Report Send] Generated thumbnail URL for ${indexType}`);
+                console.log(`[Report Send] Generated thumbnail URL for ${indexType} (maintaining aspect ratio)`);
               }
             }
           } catch (thumbError: any) {
@@ -257,6 +259,7 @@ export async function POST(
     const emailResult = await generateReportEmail(report, imageData);
     const emailHtml = emailResult.html;
     const imageAttachments = emailResult.attachments;
+    const imageBuffers = emailResult.imageBuffers;
 
     // Generate PDF
     console.log(`[Report Send] Generating PDF for report ${report.id}...`);
@@ -264,13 +267,24 @@ export async function POST(
     
     try {
       console.log(`[Report Send] Starting PDF generation with ${imageData.length} image data items...`);
-      pdfBuffer = await Promise.race([
-        generateReportPDF(report, imageData.map((data) => ({
+      
+      // Prepare image data with base64 encoded images for PDF
+      const pdfImageData = imageData.map((data, idx) => {
+        const imageBuffer = imageBuffers[idx];
+        const base64Image = imageBuffer && imageBuffer.length > 0 
+          ? imageBuffer.toString('base64') 
+          : undefined;
+        
+        return {
           areaName: data.areaName,
           indexType: data.indexType,
-          imageUrl: data.imageUrl,
+          imageUrl: base64Image ? `data:image/png;base64,${base64Image}` : undefined,
           stats: data.stats,
-        }))),
+        };
+      });
+      
+      pdfBuffer = await Promise.race([
+        generateReportPDF(report, pdfImageData),
         new Promise<Buffer>((_, reject) => {
           setTimeout(() => reject(new Error("PDF generation timeout after 30 seconds")), 30000);
         })
@@ -360,6 +374,25 @@ function latLngToTile(lat: number, lng: number, zoom: number): { x: number; y: n
   const latRad = lat * Math.PI / 180;
   const y = Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n);
   return { x, y };
+}
+
+/**
+ * Get image dimensions using sharp
+ */
+async function getImageDimensions(buffer: Buffer): Promise<{ width: number; height: number } | null> {
+  try {
+    const metadata = await sharp(buffer).metadata();
+    if (metadata.width && metadata.height) {
+      return {
+        width: metadata.width,
+        height: metadata.height,
+      };
+    }
+    return null;
+  } catch (error: any) {
+    console.error('[Email] Error getting image dimensions:', error.message);
+    return null;
+  }
 }
 
 /**
@@ -458,7 +491,7 @@ async function generateReportEmail(
     centerLat?: number;
     centerLng?: number;
   }>
-): Promise<{ html: string; attachments: Array<{ filename: string; content: Buffer; contentType: string; cid?: string }> }> {
+): Promise<{ html: string; attachments: Array<{ filename: string; content: Buffer; contentType: string; cid?: string }>; imageBuffers: Buffer[] }> {
   const reportDate = new Date().toLocaleDateString("es-MX", {
     year: "numeric",
     month: "long",
@@ -472,6 +505,7 @@ async function generateReportEmail(
     contentType: string;
     cid?: string;
   }> = [];
+  const imageBuffers: Buffer[] = []; // Store buffers for PDF generation
   
   console.log(`[Email] Starting to process ${imageData.length} images for email (uploading to Firebase Storage with Admin SDK)...`);
   for (let i = 0; i < imageData.length; i++) {
@@ -493,9 +527,16 @@ async function generateReportEmail(
         });
         if (response.ok) {
           const arrayBuffer = await response.arrayBuffer();
-          imageBuffer = Buffer.from(arrayBuffer);
+          let buffer = Buffer.from(arrayBuffer);
+          
+          // Verify image is valid and get actual dimensions (don't modify it)
+          const metadata = await sharp(buffer).metadata();
+          console.log(`[Email] Thumbnail dimensions: ${metadata.width}x${metadata.height}`);
+          
+          // Save image as-is without any resizing/cropping
+          imageBuffer = buffer;
           contentType = response.headers.get('content-type') || 'image/png';
-          console.log(`[Email] ✅ Thumbnail downloaded successfully (${imageBuffer.length} bytes)`);
+          console.log(`[Email] ✅ Thumbnail downloaded successfully (${imageBuffer.length} bytes, ${metadata.width}x${metadata.height})`);
         } else {
           console.log(`[Email] Thumbnail download failed: ${response.status}, trying tile download...`);
         }
@@ -525,20 +566,35 @@ async function generateReportEmail(
     }
     
     if (imageBuffer) {
-      // Upload to Firebase Storage using Admin SDK and get public URL
-      const safeAreaName = data.areaName.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
-      const timestamp = Date.now();
-      const filename = `${safeAreaName}-${data.indexType.toLowerCase()}.png`;
-      const storagePath = `email-images/${timestamp}-${filename}`;
-      
+      // Upload to Firebase Storage using Admin SDK with deduplication
+      // Uses content hash to avoid re-uploading identical images
       try {
-        console.log(`[Email] Uploading image ${i + 1} to Firebase Storage (Admin SDK): ${storagePath}...`);
-        const imageUrl = await uploadFileAdmin(imageBuffer, storagePath, contentType);
+        console.log(`[Email] Uploading image ${i + 1} to Firebase Storage (Admin SDK with deduplication)...`);
+        const imageUrl = await uploadImageWithDedup(imageBuffer, data.areaName, data.indexType, contentType);
         console.log(`[Email] ✅ Image uploaded successfully: ${imageUrl.substring(0, 100)}...`);
         
-        // Use public URL in HTML - images will display inline in emails
-        // Fixed width of 600px to prevent distortion, height auto maintains aspect ratio
-        const imageTag = `<img src="${imageUrl}" alt="${data.areaName} - ${data.indexType}" width="600" style="display: block; max-width: 100%; height: auto; border-radius: 5px;" />`;
+        // Store buffer for PDF generation
+        imageBuffers.push(imageBuffer);
+        
+        // Get image dimensions to calculate aspect ratio
+        const dimensions = await getImageDimensions(imageBuffer);
+        
+        let imageStyle = 'display: block; width: auto; height: auto; border-radius: 5px;';
+        
+        if (dimensions && dimensions.width > 0 && dimensions.height > 0) {
+          // Calculate aspect ratio and lock dimensions
+          const aspectRatio = dimensions.height / dimensions.width;
+          const maxWidth = 600; // Max width for email
+          const calculatedHeight = Math.round(maxWidth * aspectRatio);
+          
+          // Lock aspect ratio with calculated dimensions
+          imageStyle = `display: block; width: ${maxWidth}px; height: ${calculatedHeight}px; max-width: 100%; border-radius: 5px; object-fit: contain;`;
+          console.log(`[Email] Image ${i + 1} dimensions: ${dimensions.width}x${dimensions.height}, aspect ratio: ${aspectRatio.toFixed(3)}, calculated: ${maxWidth}x${calculatedHeight}`);
+        } else {
+          console.log(`[Email] Could not get dimensions for image ${i + 1}, using auto sizing`);
+        }
+        
+        const imageTag = `<img src="${imageUrl}" alt="${data.areaName} - ${data.indexType}" style="${imageStyle}" />`;
         
         imagesHtml += `
       <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom: 20px;">
@@ -546,7 +602,7 @@ async function generateReportEmail(
           <td style="padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: white;">
             <h3 style="color: #5db815; margin-top: 0;">${data.areaName} - ${data.indexType}</h3>
             <p style="margin-top: 10px; margin-bottom: 15px;"><strong>Valores:</strong> Mín: ${data.stats.min.toFixed(3)}, Máx: ${data.stats.max.toFixed(3)}, Promedio: ${data.stats.mean.toFixed(3)}</p>
-            <table cellpadding="0" cellspacing="0" border="0" width="600" align="center" style="margin: 15px auto;">
+            <table cellpadding="0" cellspacing="0" border="0" width="100%" align="center" style="margin: 15px auto;">
               <tr>
                 <td align="center">
                   ${imageTag}
@@ -572,16 +628,24 @@ async function generateReportEmail(
         </tr>
       </table>
     `;
+        // Push empty buffer for PDF (no image available)
+        imageBuffers.push(Buffer.alloc(0));
       }
     } else {
-      console.log(`[Email] Image ${i + 1} FAILED - no image buffer`);
+      // No image buffer available at all
       imagesHtml += `
-      <div style="margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: white;">
-        <h3 style="color: #5db815; margin-top: 0;">${data.areaName} - ${data.indexType}</h3>
-        <p style="color: #666; font-style: italic;">Imagen no disponible - ver en dashboard</p>
-        <p style="margin-top: 10px;"><strong>Valores:</strong> Mín: ${data.stats.min.toFixed(3)}, Máx: ${data.stats.max.toFixed(3)}, Promedio: ${data.stats.mean.toFixed(3)}</p>
-      </div>
+      <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom: 20px;">
+        <tr>
+          <td style="padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: white;">
+            <h3 style="color: #5db815; margin-top: 0;">${data.areaName} - ${data.indexType}</h3>
+            <p style="margin-top: 10px; margin-bottom: 10px;"><strong>Valores:</strong> Mín: ${data.stats.min.toFixed(3)}, Máx: ${data.stats.max.toFixed(3)}, Promedio: ${data.stats.mean.toFixed(3)}</p>
+            <p style="color: #666; font-style: italic;">Imagen no disponible - ver en dashboard</p>
+          </td>
+        </tr>
+      </table>
     `;
+      // Push empty buffer for PDF
+      imageBuffers.push(Buffer.alloc(0));
     }
   }
   
@@ -660,8 +724,9 @@ async function generateReportEmail(
   `;
   
   console.log(`[Email] Generated email HTML with ${imageAttachments.length} inline image attachments`);
+  console.log(`[Email] Stored ${imageBuffers.length} image buffers for PDF generation`);
   
-  // Return both HTML and attachments
-  return { html: emailHtml, attachments: imageAttachments };
+  // Return HTML, attachments, and image buffers for PDF
+  return { html: emailHtml, attachments: imageAttachments, imageBuffers };
 }
 

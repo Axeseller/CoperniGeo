@@ -48,11 +48,17 @@ async function processImageData(imageData: ImageData[]): Promise<ImageData[]> {
  */
 export async function generateReportPDF(
   report: Report,
-  imageData: ImageData[]
+  imageData: Array<{
+    areaName: string;
+    indexType: IndexType;
+    imageUrl?: string; // Base64 data URI: "data:image/png;base64,..."
+    stats: {
+      min: number;
+      max: number;
+      mean: number;
+    };
+  }>
 ): Promise<Buffer> {
-  // Process images (optional for now)
-  const processedImageData = await processImageData(imageData);
-  
   // Format report date
   const reportDate = new Date().toLocaleDateString("es-MX", {
     year: "numeric",
@@ -61,12 +67,15 @@ export async function generateReportPDF(
   });
   
   // Prepare image data for PDF template
-  const pdfImageData = processedImageData.map((data) => ({
+  // imageData.imageUrl should already be a base64 data URI from the send route
+  const pdfImageData = imageData.map((data) => ({
     areaName: data.areaName,
     indexType: data.indexType,
-    imageUrl: data.imageBase64, // Use base64 if available
+    imageUrl: data.imageUrl, // Should be base64 data URI: "data:image/png;base64,..."
     stats: data.stats,
   }));
+  
+  console.log(`[PDF] Preparing ${pdfImageData.length} images for PDF. Images with data: ${pdfImageData.filter(d => d.imageUrl).length}`);
   
   // Create PDF Document using the template component
   const pdfDoc = (
