@@ -98,6 +98,21 @@ Para configurar Resend:
 2. Obtén tu API key desde el dashboard
 3. Verifica tu dominio para usar emails personalizados
 
+#### WhatsApp (Meta/Facebook Graph API)
+```env
+WHATSAPP_PHONE_NUMBER_ID=904642582732414
+WHATSAPP_ACCESS_TOKEN=EAAQ7k1ZAiJCIBQFvZATQejJZA33lUbLP3hZBKKGBvNpsW7wHkC81i333c1C4ZBEvjjZCWp6xa6KT6Eub23ZCX9e37HTazOly66AQjedPPOAj7QC3q4emy7iZChqO0qr3nly8fx7GmuPDI4itRlhuEO0IrLmQZA9ZB5lcAkvYbtDKt20LldZClGLDiPRetBxG2ueZBwZDZD
+```
+
+Para configurar WhatsApp:
+1. Crea una cuenta de negocio en [Meta for Developers](https://developers.facebook.com/)
+2. Crea una aplicación de WhatsApp Business
+3. Obtén el Phone Number ID desde la configuración de WhatsApp
+4. Genera un Access Token con permisos para enviar mensajes
+5. Crea una plantilla de mensaje llamada `reporte_automatico` con dos parámetros de texto:
+   - `indexes`: Para los índices (ej: "NDVI, NDRE y EVI")
+   - `areas`: Para las áreas (ej: "cerca de berries")
+
 ### 3. Ejecutar en desarrollo
 
 ```bash

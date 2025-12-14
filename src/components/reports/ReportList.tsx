@@ -78,7 +78,11 @@ export default function ReportList({ reports, onUpdate, onEdit }: ReportListProp
               <h4 className="font-medium text-[#242424]">
                 Reporte {getFrequencyLabel(report.frequency)}
               </h4>
-              <p className="text-sm text-[#898989]">{report.email}</p>
+              <p className="text-sm text-[#898989]">
+                {report.deliveryMethod === "whatsapp" 
+                  ? `📱 WhatsApp: ${report.phoneNumber || "N/A"}` 
+                  : `📧 Email: ${report.email || "N/A"}`}
+              </p>
             </div>
             <span
               className={`px-2 py-1 text-xs rounded ${
@@ -119,12 +123,43 @@ export default function ReportList({ reports, onUpdate, onEdit }: ReportListProp
             <button
               onClick={() => handleSendNow(report)}
               disabled={sendingReports.has(report.id || "")}
-              className="w-full px-3 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full px-3 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden"
             >
-              {sendingReports.has(report.id || "") 
-                ? "Enviando reporte..." 
-                : "Enviar reporte con datos actuales ahora"}
+              {sendingReports.has(report.id || "") ? (
+                <div className="flex flex-col items-center space-y-1.5">
+                  <span>Enviando reporte...</span>
+                  <div className="w-full bg-blue-700 rounded-full h-1">
+                    <div 
+                      className="bg-white h-1 rounded-full"
+                      style={{
+                        width: '0%',
+                        animation: 'progressBar 2s ease-in-out infinite',
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                "Enviar reporte con datos actuales ahora"
+              )}
             </button>
+            {sendingReports.has(report.id || "") && (
+              <style dangerouslySetInnerHTML={{__html: `
+                @keyframes progressBar {
+                  0% {
+                    width: 0%;
+                    margin-left: 0%;
+                  }
+                  50% {
+                    width: 75%;
+                    margin-left: 12.5%;
+                  }
+                  100% {
+                    width: 0%;
+                    margin-left: 100%;
+                  }
+                }
+              `}} />
+            )}
             <div className="flex space-x-2">
               <button
                 onClick={() => handleToggleStatus(report)}

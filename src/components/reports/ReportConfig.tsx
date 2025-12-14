@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { getUserAreas } from "@/lib/firestore/areas";
 import { createReport, updateReport } from "@/lib/firestore/reports";
-import { Report, ReportFormData, IndexType, ReportFrequency } from "@/types/report";
+import { Report, ReportFormData, IndexType, ReportFrequency, DeliveryMethod } from "@/types/report";
 import { Area } from "@/types/area";
 
 interface ReportConfigProps {
@@ -26,7 +26,9 @@ export default function ReportConfig({ onSave, initialData }: ReportConfigProps)
     indices: initialData?.indices || ["NDVI"],
     cloudCoverage: initialData?.cloudCoverage || 20,
     frequency: initialData?.frequency || "5days",
+    deliveryMethod: initialData?.deliveryMethod || "email",
     email: initialData?.email || user?.email || "",
+    phoneNumber: initialData?.phoneNumber || "",
   });
 
   const loadAreas = useCallback(async () => {
@@ -72,9 +74,23 @@ export default function ReportConfig({ onSave, initialData }: ReportConfigProps)
       return;
     }
 
+    // Validate based on delivery method
+    if (formData.deliveryMethod === "email") {
     if (!formData.email || !formData.email.includes("@")) {
       setError("Email inválido");
       return;
+      }
+    } else if (formData.deliveryMethod === "whatsapp") {
+      if (!formData.phoneNumber || formData.phoneNumber.trim().length === 0) {
+        setError("Número de teléfono requerido para WhatsApp");
+        return;
+      }
+      // Validate phone number format (should be digits only, at least 10 digits)
+      const phoneDigits = formData.phoneNumber.replace(/\D/g, "");
+      if (phoneDigits.length < 10) {
+        setError("Número de teléfono inválido (debe tener al menos 10 dígitos)");
+        return;
+      }
     }
 
     setLoading(true);
@@ -82,10 +98,11 @@ export default function ReportConfig({ onSave, initialData }: ReportConfigProps)
     setSuccessMessage("");
     try {
       let reportId: string;
+      const isNewReport = !initialData?.id;
+      
       if (initialData?.id) {
         await updateReport(initialData.id, {
           ...formData,
-          deliveryMethod: "email",
           status: initialData.status,
         });
         reportId = initialData.id;
@@ -93,10 +110,36 @@ export default function ReportConfig({ onSave, initialData }: ReportConfigProps)
         reportId = await createReport({
           ...formData,
           userId: user.uid,
-          deliveryMethod: "email",
           status: "active",
         });
       }
+      
+      // If this is a new WhatsApp report, send confirmation message
+      if (isNewReport && formData.deliveryMethod === "whatsapp") {
+        try {
+          console.log(`[ReportConfig] Sending WhatsApp confirmation for report ${reportId}...`);
+          const confirmResponse = await fetch(`/api/reports/${reportId}/confirm-whatsapp`, {
+            method: "POST",
+          });
+          
+          if (!confirmResponse.ok) {
+            const errorData = await confirmResponse.json();
+            console.error(`[ReportConfig] WhatsApp confirmation failed:`, errorData);
+            throw new Error(errorData.error || "Error al enviar confirmación de WhatsApp");
+          }
+          
+          console.log(`[ReportConfig] WhatsApp confirmation sent successfully`);
+        } catch (whatsappErr: any) {
+          console.error(`[ReportConfig] WhatsApp confirmation error:`, whatsappErr);
+          // Don't fail the whole operation, just show a warning
+          setError(`Reporte creado pero no se pudo enviar confirmación de WhatsApp: ${whatsappErr.message}`);
+          setSavedReportId(reportId);
+          onSave(reportId);
+          setLoading(false);
+          return;
+        }
+      }
+      
       setSavedReportId(reportId);
       setSuccessMessage("Reporte guardado exitosamente. Puedes enviarlo ahora con datos actuales.");
       onSave(reportId);
@@ -147,7 +190,7 @@ export default function ReportConfig({ onSave, initialData }: ReportConfigProps)
       // Refresh reports list after a short delay
       setTimeout(() => {
         onSave(savedReportId);
-      }, 2000);
+      }, 1500);
     } catch (err: any) {
       setError(err.message || "Error al enviar el reporte");
     } finally {
@@ -248,20 +291,59 @@ export default function ReportConfig({ onSave, initialData }: ReportConfigProps)
       </div>
 
       <div>
-        <label htmlFor="email" className="block text-sm font-medium text-[#242424] mb-1">
+        <label className="block text-sm font-medium text-[#242424] mb-1">
+          Método de entrega *
+        </label>
+        <select
+          value={formData.deliveryMethod}
+          onChange={(e) =>
+            setFormData((prev) => ({ ...prev, deliveryMethod: e.target.value as DeliveryMethod }))
+          }
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-[#5db815] focus:border-[#5db815] bg-gray-50 text-[#242424]"
+        >
+          <option value="email">Email</option>
+          <option value="whatsapp">WhatsApp</option>
+        </select>
+      </div>
+
+      {formData.deliveryMethod === "email" ? (
+        <div>
+          <label htmlFor="email" className="block text-sm font-medium text-[#242424] mb-1">
           Email para recibir reportes *
         </label>
         <input
           id="email"
           type="email"
-          value={formData.email}
+            value={formData.email || ""}
           onChange={(e) =>
             setFormData((prev) => ({ ...prev, email: e.target.value }))
           }
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-[#5db815] focus:border-[#5db815] bg-gray-50 text-[#242424] placeholder-gray-400"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-[#5db815] focus:border-[#5db815] bg-gray-50 text-[#242424] placeholder-gray-400"
           required
+            placeholder="ejemplo@correo.com"
         />
       </div>
+      ) : (
+        <div>
+          <label htmlFor="phoneNumber" className="block text-sm font-medium text-[#242424] mb-1">
+            Número de teléfono para WhatsApp *
+          </label>
+          <input
+            id="phoneNumber"
+            type="tel"
+            value={formData.phoneNumber || ""}
+            onChange={(e) =>
+              setFormData((prev) => ({ ...prev, phoneNumber: e.target.value }))
+            }
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-[#5db815] focus:border-[#5db815] bg-gray-50 text-[#242424] placeholder-gray-400"
+            required
+            placeholder="523318450745 (con código de país, sin + ni espacios)"
+          />
+          <p className="mt-1 text-xs text-[#898989]">
+            Incluye el código de país sin el símbolo + (ejemplo: 523318450745 para México)
+          </p>
+        </div>
+      )}
 
       <button
         type="submit"
@@ -272,14 +354,49 @@ export default function ReportConfig({ onSave, initialData }: ReportConfigProps)
       </button>
 
       {savedReportId && (
+        <div className="mt-3">
         <button
           type="button"
           onClick={handleSendNow}
           disabled={sending}
-          className="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 mt-3"
+            className="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden"
         >
-          {sending ? "Enviando reporte..." : "Enviar reporte con datos actuales ahora"}
+            {sending ? (
+              <div className="flex flex-col items-center space-y-2">
+                <span>Enviando reporte...</span>
+                <div className="w-full bg-blue-700 rounded-full h-1.5">
+                  <div 
+                    className="bg-white h-1.5 rounded-full"
+                    style={{
+                      width: '0%',
+                      animation: 'progressBar 2s ease-in-out infinite',
+                    }}
+                  />
+                </div>
+              </div>
+            ) : (
+              "Enviar reporte con datos actuales ahora"
+            )}
         </button>
+          {sending && (
+            <style dangerouslySetInnerHTML={{__html: `
+              @keyframes progressBar {
+                0% {
+                  width: 0%;
+                  margin-left: 0%;
+                }
+                50% {
+                  width: 75%;
+                  margin-left: 12.5%;
+                }
+                100% {
+                  width: 0%;
+                  margin-left: 100%;
+                }
+              }
+            `}} />
+          )}
+        </div>
       )}
     </form>
   );

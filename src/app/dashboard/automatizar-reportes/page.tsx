@@ -31,19 +31,23 @@ export default function AutomatizarReportesPage() {
     loadReports();
   }, [loadReports]);
 
-  const handleSave = (reportId?: string) => {
-    // Don't close the form immediately if reportId is provided
-    // This allows the user to see the "send now" button
-    if (!reportId) {
-      setShowForm(false);
-      setEditingReport(null);
-    }
-    loadReports();
+  const handleSave = async (reportId?: string) => {
+    // Reload reports to show the newly created/updated report
+    await loadReports();
+    // Close the form to show the updated list
+    // The form will show the "send now" button if needed, but we want to show the list
+    setShowForm(false);
+    setEditingReport(null);
   };
 
   const handleEdit = (report: Report) => {
     setEditingReport(report);
     setShowForm(true);
+  };
+
+  const handleCloseForm = () => {
+    setShowForm(false);
+    setEditingReport(null);
   };
 
   if (loading) {
@@ -73,10 +77,32 @@ export default function AutomatizarReportesPage() {
       </div>
 
       {showForm ? (
-        <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-          <h2 className="text-xl font-semibold text-[#242424] mb-4">
-            {editingReport ? "Editar Reporte" : "Crear Nuevo Reporte"}
-          </h2>
+        <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200 relative">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold text-[#242424]">
+              {editingReport ? "Editar Reporte" : "Crear Nuevo Reporte"}
+            </h2>
+            <button
+              onClick={handleCloseForm}
+              className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-gray-100"
+              aria-label="Cerrar formulario"
+            >
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          </div>
           <ReportConfig onSave={handleSave} initialData={editingReport || undefined} />
         </div>
       ) : (

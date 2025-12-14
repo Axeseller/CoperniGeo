@@ -3,6 +3,7 @@ import { getReportAdmin, markReportGeneratedAdmin, getAreaAdmin } from "@/lib/fi
 import { initializeEarthEngine, getEarthEngine } from "@/lib/earthEngine";
 import { calculateIndex, getSentinel2Collection, getMostRecentImage } from "@/lib/indices/calculations";
 import { sendEmail } from "@/lib/email/resend";
+import { sendReportWhatsApp } from "@/lib/whatsapp/meta";
 import { generateReportPDF } from "@/lib/pdf/generateReportPDF";
 import { IndexType } from "@/types/report";
 import { getFrequencyLabel } from "@/lib/utils/reports";
@@ -353,9 +354,31 @@ export async function POST(
       pdfBuffer = null;
     }
 
-    // Send email with PDF attachment
+    // Send report via email or WhatsApp based on deliveryMethod
     const reportDate = new Date().toLocaleDateString("es-MX");
-    console.log(`[Report Send] Sending email to ${report.email}...`);
+    
+    if (report.deliveryMethod === "whatsapp") {
+      // For WhatsApp, we don't send the full report with images
+      // The WhatsApp template message was already sent when the report was created
+      // This endpoint is for email reports only
+      console.log(`[Report Send] Skipping report send for WhatsApp delivery method - confirmation was already sent when report was created`);
+      
+      // Mark report as generated
+      await markReportGeneratedAdmin(report.id);
+      
+      return NextResponse.json({
+        success: true,
+        message: "WhatsApp report confirmed (confirmation was sent when report was created)",
+        reportId: report.id,
+      });
+    } else {
+      // Send via email (default)
+      if (!report.email) {
+        throw new Error("Email is required for email delivery");
+      }
+      
+      const emailAddress = report.email; // TypeScript now knows this is string
+      console.log(`[Report Send] Sending email to ${emailAddress}...`);
     
     // Log PDF status before sending
     if (pdfBuffer && pdfBuffer.length > 0) {
@@ -366,42 +389,43 @@ export async function POST(
     
     try {
       console.log(`[Report Send] Preparing email...`);
-      
-      // Combine PDF attachment (if available) with inline image attachments
-      const allAttachments: Array<{
-        filename: string;
-        content: Buffer;
-        contentType: string;
-        cid?: string;
-      }> = [];
-      
-      // Note: No image attachments needed - images are hosted on Firebase Storage
-      // and embedded in HTML using public URLs
-      if (imageAttachments && imageAttachments.length > 0) {
-        console.log(`[Report Send] Note: ${imageAttachments.length} images are hosted on Firebase Storage (no attachments needed)`);
-      }
-      
-      // Add PDF attachment if available
-      if (pdfBuffer) {
-        console.log(`[Report Send] Adding PDF attachment...`);
-        allAttachments.push({
-          filename: `reporte-copernigeo-${reportDate.replace(/\//g, "-")}.pdf`,
-          content: pdfBuffer,
-          contentType: "application/pdf",
-        });
-      }
-      
+        
+        // Combine PDF attachment (if available) with inline image attachments
+        const allAttachments: Array<{
+          filename: string;
+          content: Buffer;
+          contentType: string;
+          cid?: string;
+        }> = [];
+        
+        // Note: No image attachments needed - images are hosted on Firebase Storage
+        // and embedded in HTML using public URLs
+        if (imageAttachments && imageAttachments.length > 0) {
+          console.log(`[Report Send] Note: ${imageAttachments.length} images are hosted on Firebase Storage (no attachments needed)`);
+        }
+        
+        // Add PDF attachment if available
+        if (pdfBuffer) {
+          console.log(`[Report Send] Adding PDF attachment...`);
+          allAttachments.push({
+            filename: `reporte-copernigeo-${reportDate.replace(/\//g, "-")}.pdf`,
+            content: pdfBuffer,
+            contentType: "application/pdf",
+          });
+        }
+        
       await sendEmail(
-        report.email,
+          emailAddress,
         `Reporte de Monitoreo - ${reportDate}`,
         emailHtml,
         undefined,
-        allAttachments.length > 0 ? allAttachments : undefined
+          allAttachments.length > 0 ? allAttachments : undefined
       );
-      console.log(`[Report Send] ✅ Email sent successfully for report ${report.id} to ${report.email}${pdfBuffer ? " with PDF attachment" : " (no PDF)"}${imageAttachments && imageAttachments.length > 0 ? ` and ${imageAttachments.length} inline images` : ""}`);
+        console.log(`[Report Send] ✅ Email sent successfully for report ${report.id} to ${emailAddress}${pdfBuffer ? " with PDF attachment" : " (no PDF)"}${imageAttachments && imageAttachments.length > 0 ? ` and ${imageAttachments.length} inline images` : ""}`);
     } catch (emailError: any) {
       console.error(`[Report Send] ❌ Email sending failed:`, emailError);
       throw new Error(`Failed to send email: ${emailError.message}`);
+      }
     }
 
     // Mark report as generated using Admin SDK (bypasses Firestore rules)

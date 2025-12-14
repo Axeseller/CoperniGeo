@@ -142,9 +142,13 @@ export async function POST(request: NextRequest) {
         })));
 
         // Send email with PDF attachment
+        if (!report.email) {
+          throw new Error("Email is required for email delivery");
+        }
+        const emailAddress = report.email; // TypeScript now knows this is string
         const reportDate = new Date().toLocaleDateString("es-MX");
         await sendEmail(
-          report.email,
+          emailAddress,
           `Reporte de Monitoreo - ${reportDate}`,
           emailHtml,
           undefined,

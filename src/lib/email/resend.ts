@@ -86,7 +86,7 @@ export async function sendEmail(
   });
   
   try {
-    const result = await resend.emails.send(emailOptions);
+  const result = await resend.emails.send(emailOptions);
     console.log(`[Email] ✅ Email sent successfully:`, JSON.stringify(result, null, 2));
     
     // Check if result indicates an error

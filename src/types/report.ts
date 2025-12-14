@@ -11,7 +11,8 @@ export interface Report {
   cloudCoverage: number; // 0-100
   frequency: ReportFrequency;
   deliveryMethod: DeliveryMethod;
-  email: string;
+  email?: string; // Optional - required for email delivery
+  phoneNumber?: string; // Optional - required for WhatsApp delivery
   status: ReportStatus;
   lastGenerated?: Date | any;
   nextRun: Date | any;
@@ -23,6 +24,8 @@ export interface ReportFormData {
   indices: IndexType[];
   cloudCoverage: number;
   frequency: ReportFrequency;
-  email: string;
+  deliveryMethod: DeliveryMethod;
+  email?: string;
+  phoneNumber?: string;
 }
 
