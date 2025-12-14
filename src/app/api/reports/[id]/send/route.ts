@@ -8,6 +8,8 @@ import { IndexType } from "@/types/report";
 import { getFrequencyLabel } from "@/lib/utils/reports";
 import { calculatePolygonArea, squareMetersToKm } from "@/lib/utils/geometry";
 import { uploadImageWithDedup } from "@/lib/storage/admin-upload";
+import { compositeIndexOverlay } from '@/lib/images/compositeImage';
+import { renderMapWithTiles } from '@/lib/images/tileRenderer';
 import sharp from 'sharp';
 
 export const dynamic = 'force-dynamic';
@@ -65,9 +67,11 @@ export async function POST(
       indexType: IndexType;
       imageUrl: string;
       thumbnailUrl?: string;
+      baseSatelliteUrl?: string; // RGB base satellite image from Earth Engine
       stats: { min: number; max: number; mean: number };
       centerLat?: number;
       centerLng?: number;
+      coordinates?: { lat: number; lng: number }[];
     }> = [];
 
     console.log(`[Report Send] Processing ${validAreas.length} areas with ${report.indices.length} indices each...`);
@@ -188,38 +192,88 @@ export async function POST(
           const tileUrl = mapId?.tile_fetcher?.url_format || mapId?.urlFormat || mapId?.url_format || "";
           console.log(`[Report Send] Extracted tile URL: ${tileUrl.substring(0, 150)}...`);
 
-          // Try to get thumbnail URL if available (for email embedding)
+          // Generate both base satellite and index overlay from Earth Engine
+          // This ensures perfect alignment as both use the same coordinate system
           let thumbnailUrl: string | null = null;
+          let baseSatelliteUrl: string | null = null;
+          
           try {
-            // Earth Engine might provide a thumbnail URL in the mapId
-            thumbnailUrl = mapId?.thumbnailUrl || mapId?.thumbUrl || null;
-            if (thumbnailUrl) {
-              console.log(`[Report Send] Found thumbnail URL for ${indexType}`);
-            } else {
-              // Try to generate thumbnail using getThumbURL if available
-              // Use larger dimensions and let Earth Engine maintain aspect ratio
-              // Note: This might not be available in Node.js client
-              if (typeof (clipped as any).getThumbURL === 'function') {
-                thumbnailUrl = await new Promise<string>((resolve, reject) => {
-                  (clipped as any).getThumbURL({
-                    dimensions: 1200, // Single dimension - Earth Engine will maintain aspect ratio
-                    format: 'png',
-                    region: polygon,
-                    min: statsValue[`${indexType}_min`],
-                    max: statsValue[`${indexType}_max`],
-                    palette: indexType === "NDVI" || indexType === "NDRE"
-                      ? ["red", "yellow", "green"]
-                      : ["blue", "cyan", "yellow", "orange", "red"],
-                  }, (url: string, error?: Error) => {
-                    if (error) reject(error);
-                    else resolve(url);
-                  });
+            // Calculate bounding box with padding
+            let minLat = coordinates[0].lat;
+            let maxLat = coordinates[0].lat;
+            let minLng = coordinates[0].lng;
+            let maxLng = coordinates[0].lng;
+            
+            for (const coord of coordinates) {
+              if (coord.lat < minLat) minLat = coord.lat;
+              if (coord.lat > maxLat) maxLat = coord.lat;
+              if (coord.lng < minLng) minLng = coord.lng;
+              if (coord.lng > maxLng) maxLng = coord.lng;
+            }
+            
+            // Add 5% padding
+            const latPadding = (maxLat - minLat) * 0.05;
+            const lngPadding = (maxLng - minLng) * 0.05;
+            
+            // Store bounds for later use
+            const boundsData = {
+              minLat: minLat - latPadding,
+              maxLat: maxLat + latPadding,
+              minLng: minLng - lngPadding,
+              maxLng: maxLng + lngPadding,
+            };
+            
+            // Create bounding box as a polygon for Earth Engine
+            const paddedBounds = ee.Geometry.Polygon([[
+              [boundsData.minLng, boundsData.minLat],
+              [boundsData.maxLng, boundsData.minLat],
+              [boundsData.maxLng, boundsData.maxLat],
+              [boundsData.minLng, boundsData.maxLat],
+              [boundsData.minLng, boundsData.minLat]
+            ]]);
+            
+            console.log(`[Report Send] Generating Earth Engine images for bounding box`);
+            console.log(`[Report Send] Bounding box:`, boundsData);
+            
+            // Generate RGB base satellite image from the SAME Sentinel-2 image
+            console.log(`[Report Send] Generating RGB base satellite image...`);
+            baseSatelliteUrl = await new Promise<string>((resolve, reject) => {
+              (image as any).getThumbURL({
+                dimensions: 1200,
+                format: 'png',
+                region: paddedBounds,
+                bands: ['B4', 'B3', 'B2'], // RGB bands
+                min: [0, 0, 0],
+                max: [3000, 3000, 3000], // Typical Sentinel-2 reflectance values
+              }, (url: string, error?: Error) => {
+                if (error) reject(error);
+                else resolve(url);
+              });
+            });
+            console.log(`[Report Send] ✅ RGB base satellite image generated`);
+            
+            // Generate index overlay thumbnail for the SAME bounding box
+            if (typeof (indexImage as any).getThumbURL === 'function') {
+              console.log(`[Report Send] Generating index overlay thumbnail...`);
+              thumbnailUrl = await new Promise<string>((resolve, reject) => {
+                (indexImage as any).getThumbURL({
+                  dimensions: 1200, // Same dimensions as base image
+                  format: 'png',
+                  region: paddedBounds, // Same bounding box as base image
+                  min: statsValue[`${indexType}_min`],
+                  max: statsValue[`${indexType}_max`],
+                  palette: indexType === "NDVI" || indexType === "NDRE"
+                    ? ["red", "yellow", "green"]
+                    : ["blue", "cyan", "yellow", "orange", "red"],
+                }, (url: string, error?: Error) => {
+                  if (error) reject(error);
+                  else resolve(url);
                 });
-                console.log(`[Report Send] Generated thumbnail URL for ${indexType} (maintaining aspect ratio)`);
-              }
+              });
+              console.log(`[Report Send] ✅ Index overlay thumbnail generated`);
             }
           } catch (thumbError: any) {
-            console.log(`[Report Send] Thumbnail generation not available or failed: ${thumbError.message}`);
+            console.log(`[Report Send] Thumbnail generation failed: ${thumbError.message}`);
           }
 
           // Calculate center coordinates for tile selection
@@ -232,6 +286,7 @@ export async function POST(
             indexType,
             imageUrl: tileUrl,
             thumbnailUrl: thumbnailUrl || undefined,
+            baseSatelliteUrl: baseSatelliteUrl || undefined, // Base RGB satellite image
             stats: {
               min: statsValue[`${indexType}_min`],
               max: statsValue[`${indexType}_max`],
@@ -239,6 +294,7 @@ export async function POST(
             },
             centerLat,
             centerLng,
+            coordinates, // Pass coordinates for composite generation
           });
           console.log(`[Report Send] Completed ${indexType} for ${area.name}`);
         } catch (indexError: any) {
@@ -487,9 +543,11 @@ async function generateReportEmail(
     indexType: IndexType;
     imageUrl: string;
     thumbnailUrl?: string;
+    baseSatelliteUrl?: string; // RGB base satellite image from Earth Engine
     stats: { min: number; max: number; mean: number };
     centerLat?: number;
     centerLng?: number;
+    coordinates?: { lat: number; lng: number }[]; // Add coordinates for composite generation
   }>
 ): Promise<{ html: string; attachments: Array<{ filename: string; content: Buffer; contentType: string; cid?: string }>; imageBuffers: Buffer[] }> {
   const reportDate = new Date().toLocaleDateString("es-MX", {
@@ -512,72 +570,118 @@ async function generateReportEmail(
     const data = imageData[i];
     console.log(`[Email] Processing image ${i + 1}/${imageData.length}: ${data.areaName} - ${data.indexType}`);
     console.log(`[Email] Tile URL: ${data.imageUrl.substring(0, 150)}...`);
-    console.log(`[Email] Thumbnail URL: ${data.thumbnailUrl ? data.thumbnailUrl.substring(0, 150) + '...' : 'not available'}`);
+    console.log(`[Email] Index overlay URL: ${data.thumbnailUrl ? data.thumbnailUrl.substring(0, 150) + '...' : 'not available'}`);
+    console.log(`[Email] Base satellite URL: ${data.baseSatelliteUrl ? data.baseSatelliteUrl.substring(0, 150) + '...' : 'not available'}`);
     console.log(`[Email] Center coordinates: lat=${data.centerLat}, lng=${data.centerLng}`);
     
-    // Try thumbnail URL first (if available), otherwise download tile
-    let imageBuffer: Buffer | null = null;
+    // Download index overlay and base satellite image from Earth Engine
+    let overlayBuffer: Buffer | null = null;
+    let baseBuffer: Buffer | null = null;
     let contentType: string = 'image/png';
     
+    // Download base satellite image from Earth Engine
+    if (data.baseSatelliteUrl) {
+      console.log(`[Email] Downloading base satellite image from Earth Engine...`);
+      try {
+        const response = await fetch(data.baseSatelliteUrl, {
+          headers: { 'User-Agent': 'CoperniGeo-Email-Service/1.0' },
+        });
+        if (response.ok) {
+          const arrayBuffer = await response.arrayBuffer();
+          baseBuffer = Buffer.from(arrayBuffer);
+          
+          const metadata = await sharp(baseBuffer).metadata();
+          console.log(`[Email] ✅ Base satellite image downloaded (${baseBuffer.length} bytes, ${metadata.width}x${metadata.height})`);
+          contentType = response.headers.get('content-type') || 'image/png';
+        } else {
+          console.log(`[Email] Base satellite download failed: ${response.status}`);
+        }
+      } catch (baseError: any) {
+        console.log(`[Email] Base satellite download error: ${baseError.message}`);
+      }
+    }
+    
+    // Download index overlay from Earth Engine
     if (data.thumbnailUrl) {
-      console.log(`[Email] Attempting to download thumbnail URL...`);
+      console.log(`[Email] Downloading index overlay from Earth Engine...`);
       try {
         const response = await fetch(data.thumbnailUrl, {
           headers: { 'User-Agent': 'CoperniGeo-Email-Service/1.0' },
         });
         if (response.ok) {
           const arrayBuffer = await response.arrayBuffer();
-          let buffer = Buffer.from(arrayBuffer);
+          overlayBuffer = Buffer.from(arrayBuffer);
           
-          // Verify image is valid and get actual dimensions (don't modify it)
-          const metadata = await sharp(buffer).metadata();
-          console.log(`[Email] Thumbnail dimensions: ${metadata.width}x${metadata.height}`);
-          
-          // Save image as-is without any resizing/cropping
-          imageBuffer = buffer;
-          contentType = response.headers.get('content-type') || 'image/png';
-          console.log(`[Email] ✅ Thumbnail downloaded successfully (${imageBuffer.length} bytes, ${metadata.width}x${metadata.height})`);
+          const metadata = await sharp(overlayBuffer).metadata();
+          console.log(`[Email] ✅ Index overlay downloaded (${overlayBuffer.length} bytes, ${metadata.width}x${metadata.height})`);
         } else {
-          console.log(`[Email] Thumbnail download failed: ${response.status}, trying tile download...`);
+          console.log(`[Email] Index overlay download failed: ${response.status}, trying tile download...`);
         }
       } catch (thumbError: any) {
-        console.log(`[Email] Thumbnail download error: ${thumbError.message}, trying tile download...`);
+        console.log(`[Email] Index overlay download error: ${thumbError.message}, trying tile download...`);
       }
     }
     
-    // If thumbnail didn't work, try downloading tile
-    if (!imageBuffer) {
-      const tileBase64 = await downloadTileAsBase64(
-        data.imageUrl, 
-        data.areaName, 
-        data.indexType,
-        data.centerLat,
-        data.centerLng
-      );
-      if (tileBase64) {
-        // Extract base64 data from data URI
-        const base64Match = tileBase64.match(/^data:([^;]+);base64,(.+)$/);
-        if (base64Match) {
-          contentType = base64Match[1];
-          imageBuffer = Buffer.from(base64Match[2], 'base64');
-          console.log(`[Email] ✅ Tile downloaded and converted to buffer (${imageBuffer.length} bytes)`);
+    // Use tile-based rendering (mimics dashboard exactly!)
+    // This renders Google Maps + Earth Engine tiles + polygon, then captures as image
+    let finalImageBuffer: Buffer | null = null;
+    
+    if (data.coordinates && data.coordinates.length >= 3 && data.imageUrl) {
+      try {
+        console.log(`[Email] Rendering map with tiles (dashboard approach) for ${data.areaName}...`);
+        console.log(`[Email] Using tile URL: ${data.imageUrl.substring(0, 100)}...`);
+        
+        // Render map with tiles - SAME as dashboard!
+        finalImageBuffer = await renderMapWithTiles(
+          data.coordinates,
+          data.imageUrl, // Earth Engine tile URL
+          {
+            width: 1200,
+            height: 1200,
+            polygonColor: '#5db815',
+            indexOpacity: 0.7,
+          }
+        );
+        
+        console.log(`[Email] ✅ Tile-based image rendered (${finalImageBuffer.length} bytes)`);
+        contentType = 'image/png';
+      } catch (renderError: any) {
+        console.error(`[Email] Failed to render map with tiles: ${renderError.message}`);
+        console.log(`[Email] Falling back to Earth Engine composite approach...`);
+        
+        // Fallback: Try Earth Engine composite if tile rendering fails
+        if (baseBuffer && overlayBuffer) {
+          try {
+            finalImageBuffer = await compositeIndexOverlay(
+              baseBuffer,
+              overlayBuffer,
+              data.coordinates,
+              0.7,
+              '#5db815'
+            );
+            console.log(`[Email] ✅ Fallback composite generated (${finalImageBuffer.length} bytes)`);
+          } catch (compositeError: any) {
+            console.error(`[Email] Fallback composite also failed: ${compositeError.message}`);
+          }
         }
       }
+    } else {
+      console.log(`[Email] Missing coordinates or tile URL - cannot render map`);
     }
-    
-    if (imageBuffer) {
+      
+    // Upload final image to Firebase Storage
+    if (finalImageBuffer) {
       // Upload to Firebase Storage using Admin SDK with deduplication
-      // Uses content hash to avoid re-uploading identical images
       try {
         console.log(`[Email] Uploading image ${i + 1} to Firebase Storage (Admin SDK with deduplication)...`);
-        const imageUrl = await uploadImageWithDedup(imageBuffer, data.areaName, data.indexType, contentType);
+        const imageUrl = await uploadImageWithDedup(finalImageBuffer, data.areaName, data.indexType, contentType);
         console.log(`[Email] ✅ Image uploaded successfully: ${imageUrl.substring(0, 100)}...`);
         
         // Store buffer for PDF generation
-        imageBuffers.push(imageBuffer);
+        imageBuffers.push(finalImageBuffer);
         
         // Get image dimensions to calculate aspect ratio
-        const dimensions = await getImageDimensions(imageBuffer);
+        const dimensions = await getImageDimensions(finalImageBuffer);
         
         let imageStyle = 'display: block; width: auto; height: auto; border-radius: 5px;';
         
