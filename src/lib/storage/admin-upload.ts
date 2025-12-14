@@ -28,37 +28,37 @@ async function getFileUrl(path: string): Promise<string> {
 }
 
 /**
- * Find existing image in storage by checking files with matching area/index prefix
- * This helps when the same image might have been uploaded with a different hash
- * Returns the file path if found, null otherwise
+ * Delete all existing images with matching area/index prefix
+ * This ensures old cached images are removed before uploading new ones
  */
-async function findExistingImagePath(
+async function deleteExistingImages(
   areaName: string,
   indexType: string
-): Promise<string | null> {
+): Promise<void> {
   try {
     const storage = getAdminStorage();
     const bucket = storage.bucket();
     const safeAreaName = areaName.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
     const prefix = `email-images/${safeAreaName}-${indexType.toLowerCase()}-`;
     
-    console.log(`[Admin Storage] Checking for existing images with prefix: ${prefix}`);
+    console.log(`[Admin Storage] Deleting old images with prefix: ${prefix}`);
     
-    // List files with this prefix
-    const [files] = await bucket.getFiles({ prefix, maxResults: 1 });
+    // List all files with this prefix
+    const [files] = await bucket.getFiles({ prefix });
     
     if (files && files.length > 0) {
-      // Return the first matching file path
-      const existingPath = files[0].name;
-      console.log(`[Admin Storage] ✅ Found existing image: ${existingPath}`);
-      return existingPath;
+      console.log(`[Admin Storage] Found ${files.length} old image(s) to delete`);
+      
+      // Delete all matching files
+      await Promise.all(files.map(file => file.delete()));
+      
+      console.log(`[Admin Storage] ✅ Deleted ${files.length} old image(s)`);
+    } else {
+      console.log(`[Admin Storage] No old images found to delete`);
     }
-    
-    console.log(`[Admin Storage] No existing image found for ${areaName}-${indexType}`);
-    return null;
   } catch (error: any) {
-    console.error(`[Admin Storage] Error finding existing image:`, error.message);
-    return null;
+    console.error(`[Admin Storage] Error deleting old images:`, error.message);
+    // Don't throw - continue with upload even if deletion fails
   }
 }
 
@@ -119,7 +119,7 @@ export async function uploadFileAdmin(
 
 /**
  * Upload image with content-based deduplication
- * Uses image content hash to generate path, avoiding duplicate uploads
+ * Deletes old images first to ensure fresh content
  */
 export async function uploadImageWithDedup(
   imageBuffer: Buffer,
@@ -127,15 +127,10 @@ export async function uploadImageWithDedup(
   indexType: string,
   contentType: string = 'image/png'
 ): Promise<string> {
-  // First, check if any image with this area/index already exists
-  // (in case the content hash differs slightly but it's the same image)
-  const existingPath = await findExistingImagePath(areaName, indexType);
-  if (existingPath) {
-    console.log(`[Admin Storage] ✅ Reusing existing image for ${areaName}-${indexType} at ${existingPath}`);
-    return await getFileUrl(existingPath);
-  }
+  // Delete any old images for this area/index to avoid serving stale cached versions
+  await deleteExistingImages(areaName, indexType);
   
-  // Generate content-based path and upload
+  // Generate content-based path and upload new image
   const path = generateImagePath(areaName, indexType, imageBuffer);
   console.log(`[Admin Storage] Generated new path for upload: ${path}`);
   return await uploadFileAdmin(imageBuffer, path, contentType);
