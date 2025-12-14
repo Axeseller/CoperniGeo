@@ -280,7 +280,7 @@ export async function POST(
           const centerLat = coordinates.reduce((sum: number, coord: any) => sum + coord.lat, 0) / coordinates.length;
           const centerLng = coordinates.reduce((sum: number, coord: any) => sum + coord.lng, 0) / coordinates.length;
           console.log(`[Report Send] Calculated center: lat=${centerLat}, lng=${centerLng}`);
-          
+
           imageData.push({
             areaName: area.name,
             indexType,
@@ -737,7 +737,7 @@ async function generateReportEmail(
       }
     } else {
       // No image buffer available at all
-      imagesHtml += `
+    imagesHtml += `
       <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom: 20px;">
         <tr>
           <td style="padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: white;">
@@ -774,15 +774,15 @@ async function generateReportEmail(
               <!-- Content -->
               <tr>
                 <td style="background-color: #ffffff; padding: 20px;">
-                  <p>Hola,</p>
-                  <p>Aquí está tu reporte de monitoreo satelital generado el ${reportDate}.</p>
-                  
+          <p>Hola,</p>
+          <p>Aquí está tu reporte de monitoreo satelital generado el ${reportDate}.</p>
+          
                   <h2 style="color: #242424;">Configuración del Reporte</h2>
-                  <ul>
-                    <li><strong>Frecuencia:</strong> ${getFrequencyLabel(report.frequency)}</li>
-                    <li><strong>Índices:</strong> ${report.indices.join(", ")}</li>
-                    <li><strong>Cobertura de nubes:</strong> ${report.cloudCoverage}%</li>
-                  </ul>
+          <ul>
+            <li><strong>Frecuencia:</strong> ${getFrequencyLabel(report.frequency)}</li>
+            <li><strong>Índices:</strong> ${report.indices.join(", ")}</li>
+            <li><strong>Cobertura de nubes:</strong> ${report.cloudCoverage}%</li>
+          </ul>
 
                   <h2 style="color: #242424;">Resultados</h2>
                 </td>
@@ -790,7 +790,7 @@ async function generateReportEmail(
               <!-- Images -->
               <tr>
                 <td style="background-color: #ffffff; padding: 0 20px 20px 20px;">
-                  ${imagesHtml}
+          ${imagesHtml}
                 </td>
               </tr>
               <!-- Button -->
@@ -805,7 +805,7 @@ async function generateReportEmail(
                   <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top: 20px; padding: 15px; background-color: #e0f2fe; border-left: 4px solid #0284c7; border-radius: 4px;">
                     <tr>
                       <td>
-                        <strong>📎 PDF Adjunto:</strong> Este reporte incluye un PDF detallado con todos los resultados y estadísticas adjunto a este correo.
+                    <strong>📎 PDF Adjunto:</strong> Este reporte incluye un PDF detallado con todos los resultados y estadísticas adjunto a este correo.
                       </td>
                     </tr>
                   </table>

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState, useEffect, useRef } from "react";
 
 type FeatureType = "satellite" | "analysis" | "reports" | null;
@@ -273,25 +274,28 @@ export default function Home() {
             : 'bg-[#f4f3f4] border-b border-gray-300'
         }`}>
           <div className="px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center h-16">
+          <div className="flex justify-between items-center h-16">
               <div className="flex items-center space-x-4 md:space-x-8">
-                <h1 className="text-xl md:text-2xl font-bold text-[#5db815]">CoperniGeo</h1>
+                <Link href="/" className="flex items-center space-x-2">
+                  <Image
+                    src="/logo2.svg"
+                    alt="CoperniGeo Logo"
+                    width={32}
+                    height={32}
+                    className="w-8 h-8"
+                  />
+                  <h1 className="text-xl md:text-2xl font-bold text-[#5db815] cursor-pointer">CoperniGeo</h1>
+                </Link>
                 <div className="hidden md:flex space-x-6">
-                  <button className="text-[#121212] hover:text-[#5db815] px-3 py-2 rounded-md text-sm font-medium transition-colors">
-                    Producto
-                  </button>
-                  <button className="text-[#121212] hover:text-[#5db815] px-3 py-2 rounded-md text-sm font-medium transition-colors">
-                    Recursos
-                  </button>
-                  <button className="text-[#121212] hover:text-[#5db815] px-3 py-2 rounded-md text-sm font-medium transition-colors">
-                    Precios
-                  </button>
-                  <button className="text-[#121212] hover:text-[#5db815] px-3 py-2 rounded-md text-sm font-medium transition-colors">
-                    Clientes
-                  </button>
-                  <button className="text-[#121212] hover:text-[#5db815] px-3 py-2 rounded-md text-sm font-medium transition-colors">
-                    Contacto
-                  </button>
+                  <Link href="/" className="text-[#5db815] px-3 py-2 rounded-md text-sm font-medium">
+                Producto
+                  </Link>
+                  <Link href="/precios" className="text-[#121212] hover:text-[#5db815] px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                Precios
+                  </Link>
+                  <Link href="/contacto" className="text-[#121212] hover:text-[#5db815] px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                Contacto
+                  </Link>
                 </div>
               </div>
               <div className="flex items-center space-x-2 md:space-x-4">
@@ -322,7 +326,7 @@ export default function Home() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                     </svg>
                   )}
-                </button>
+              </button>
               </div>
             </div>
           </div>
@@ -342,56 +346,42 @@ export default function Home() {
             <div className="flex flex-col h-full">
               <div className="p-6 space-y-4 overflow-y-auto">
                 <Link
-                  href="#"
+                  href="/"
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className="block text-[#121212] hover:text-[#5db815] py-2 text-base font-medium transition-colors"
+                  className="block text-[#5db815] py-2 text-base font-medium"
                 >
                   Producto
                 </Link>
                 <Link
-                  href="#"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="block text-[#121212] hover:text-[#5db815] py-2 text-base font-medium transition-colors"
-                >
-                  Recursos
-                </Link>
-                <Link
-                  href="#"
+                  href="/precios"
                   onClick={() => setIsMobileMenuOpen(false)}
                   className="block text-[#121212] hover:text-[#5db815] py-2 text-base font-medium transition-colors"
                 >
                   Precios
                 </Link>
                 <Link
-                  href="#"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="block text-[#121212] hover:text-[#5db815] py-2 text-base font-medium transition-colors"
-                >
-                  Clientes
-                </Link>
-                <Link
-                  href="#"
+                  href="/contacto"
                   onClick={() => setIsMobileMenuOpen(false)}
                   className="block text-[#121212] hover:text-[#5db815] py-2 text-base font-medium transition-colors"
                 >
                   Contacto
                 </Link>
-                <div className="pt-4 border-t border-gray-200 space-y-3">
-                  <Link
-                    href="/inicia-sesion"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className="block text-[#121212] hover:text-[#5db815] py-2 text-base font-medium transition-colors"
-                  >
-                    Inicia sesión
-                  </Link>
-                  <Link
-                    href="/registrarte"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className="block bg-[#5db815] text-white text-center py-3 rounded-lg text-base font-medium hover:bg-[#4a9a11] transition-colors"
-                  >
-                    Registrarte
-                  </Link>
-                </div>
+              </div>
+              <div className="border-t border-gray-200 p-6 mt-auto space-y-3">
+                <Link
+                  href="/inicia-sesion"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="block w-full text-center text-[#121212] hover:text-[#5db815] px-4 py-2 rounded-md text-sm font-medium transition-colors border border-gray-300"
+                >
+                  Inicia sesión
+                </Link>
+                <Link
+                  href="/registrarte"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="block w-full text-center bg-[#5db815] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#4a9a11] transition-colors"
+                >
+                  Registrarte
+                </Link>
               </div>
             </div>
           </div>
@@ -584,7 +574,7 @@ export default function Home() {
                   <div className="mb-4">
                     <h3 className="text-xl font-bold text-gray-900 mb-1">
                       Campo Norte
-                    </h3>
+            </h3>
                     <p className="text-sm text-gray-600">
                       Análisis NDVI - 15 Dic 2024
                     </p>
@@ -818,7 +808,7 @@ export default function Home() {
                     <div className="mb-4">
                       <h3 className="text-xl font-bold text-gray-900 mb-1">
                         Campo Norte
-                      </h3>
+            </h3>
                       <p className="text-sm text-gray-600">
                         Análisis NDVI - 15 Dic 2024
                       </p>
