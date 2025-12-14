@@ -102,6 +102,7 @@ Para configurar Resend:
 ```env
 WHATSAPP_PHONE_NUMBER_ID=904642582732414
 WHATSAPP_ACCESS_TOKEN=EAAQ7k1ZAiJCIBQFvZATQejJZA33lUbLP3hZBKKGBvNpsW7wHkC81i333c1C4ZBEvjjZCWp6xa6KT6Eub23ZCX9e37HTazOly66AQjedPPOAj7QC3q4emy7iZChqO0qr3nly8fx7GmuPDI4itRlhuEO0IrLmQZA9ZB5lcAkvYbtDKt20LldZClGLDiPRetBxG2ueZBwZDZD
+WHATSAPP_WEBHOOK_VERIFY_TOKEN=tu_token_secreto_aqui
 ```
 
 Para configurar WhatsApp:
@@ -109,9 +110,12 @@ Para configurar WhatsApp:
 2. Crea una aplicación de WhatsApp Business
 3. Obtén el Phone Number ID desde la configuración de WhatsApp
 4. Genera un Access Token con permisos para enviar mensajes
-5. Crea una plantilla de mensaje llamada `reporte_automatico` con dos parámetros de texto:
-   - `indexes`: Para los índices (ej: "NDVI, NDRE y EVI")
-   - `areas`: Para las áreas (ej: "cerca de berries")
+5. Genera un token aleatorio para verificación del webhook (puedes usar `openssl rand -hex 32`)
+6. Configura el webhook en Meta Business Manager apuntando a `https://copernigeo.com/api/webhooks/whatsapp`
+7. Crea plantillas de mensaje:
+   - `reporte_automatico`: Para confirmación de configuración (parámetros: `indexes`, `areas`)
+   - `enviodereporte`: Para envío de reportes (parámetros: `nombre_reporte`, `pdf_url`)
+8. Ver detalles completos en [WHATSAPP_WEBHOOK_SETUP.md](./WHATSAPP_WEBHOOK_SETUP.md)
 
 ### 3. Ejecutar en desarrollo
 

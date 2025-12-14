@@ -137,6 +137,44 @@ export async function uploadImageWithDedup(
 }
 
 /**
+ * Upload PDF to Firebase Storage for reports
+ * Uploads to reports/{reportId}/latest.pdf (overwrites on each generation)
+ * Returns permanent public URL
+ */
+export async function uploadPDFAdmin(
+  reportId: string,
+  pdfBuffer: Buffer
+): Promise<string> {
+  const path = `reports/${reportId}/latest.pdf`;
+  
+  try {
+    const storage = getAdminStorage();
+    const bucket = storage.bucket();
+    const file = bucket.file(path);
+
+    // Upload the PDF (overwrites if exists)
+    await file.save(pdfBuffer, {
+      contentType: 'application/pdf',
+      metadata: {
+        cacheControl: 'public, max-age=31536000', // Cache for 1 year
+      },
+    });
+
+    // Make the file publicly accessible
+    await file.makePublic();
+
+    // Get the public URL
+    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${path}`;
+    
+    console.log(`[Admin Storage] ✅ PDF uploaded successfully: ${path}`);
+    return publicUrl;
+  } catch (error: any) {
+    console.error(`[Admin Storage] ❌ PDF upload failed:`, error.message);
+    throw new Error(`Failed to upload PDF to Firebase Storage: ${error.message}`);
+  }
+}
+
+/**
  * Delete a file from Firebase Storage (cleanup)
  */
 export async function deleteFileAdmin(path: string): Promise<void> {

@@ -1,0 +1,175 @@
+import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
+
+export const dynamic = 'force-dynamic';
+
+/**
+ * GET /api/webhooks/whatsapp
+ * Webhook verification endpoint (required by Meta)
+ * Meta sends a GET request with hub.mode, hub.verify_token, and hub.challenge
+ */
+export async function GET(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams;
+  const mode = searchParams.get("hub.mode");
+  const token = searchParams.get("hub.verify_token");
+  const challenge = searchParams.get("hub.challenge");
+
+  const verifyToken = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
+
+  if (!verifyToken) {
+    console.error("[Webhook] WHATSAPP_WEBHOOK_VERIFY_TOKEN is not set");
+    return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
+  }
+
+  // Verify the webhook
+  if (mode === "subscribe" && token === verifyToken) {
+    console.log("[Webhook] ✅ Webhook verified successfully");
+    return new NextResponse(challenge, { status: 200 });
+  } else {
+    console.error("[Webhook] ❌ Webhook verification failed", { mode, token, expected: verifyToken });
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+}
+
+/**
+ * POST /api/webhooks/whatsapp
+ * Handle incoming WhatsApp messages
+ */
+export async function POST(request: NextRequest) {
+  try {
+    // Verify webhook signature
+    const signature = request.headers.get("X-Hub-Signature-256");
+    const verifyToken = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
+
+    if (!verifyToken) {
+      console.error("[Webhook] WHATSAPP_WEBHOOK_VERIFY_TOKEN is not set");
+      return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
+    }
+
+    const body = await request.text();
+    
+    // Verify signature if provided
+    if (signature) {
+      const expectedSignature = crypto
+        .createHmac("sha256", verifyToken)
+        .update(body)
+        .digest("hex");
+      const providedSignature = signature.replace("sha256=", "");
+
+      if (expectedSignature !== providedSignature) {
+        console.error("[Webhook] ❌ Invalid signature");
+        return NextResponse.json({ error: "Invalid signature" }, { status: 403 });
+      }
+    }
+
+    const data = JSON.parse(body);
+
+    // Handle different webhook event types
+    if (data.object === "whatsapp_business_account") {
+      // Process incoming messages
+      if (data.entry && data.entry.length > 0) {
+        for (const entry of data.entry) {
+          if (entry.changes && entry.changes.length > 0) {
+            for (const change of entry.changes) {
+              if (change.value.messages && change.value.messages.length > 0) {
+                for (const message of change.value.messages) {
+                  await handleIncomingMessage(message, change.value.contacts?.[0]);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Always return 200 to acknowledge receipt
+    return NextResponse.json({ status: "ok" }, { status: 200 });
+  } catch (error: any) {
+    console.error("[Webhook] ❌ Error processing webhook:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+/**
+ * Handle incoming WhatsApp message
+ */
+async function handleIncomingMessage(message: any, contact: any) {
+  const from = message.from; // Phone number
+  const messageType = message.type;
+  const messageId = message.id;
+
+  console.log(`[Webhook] Received message from ${from}, type: ${messageType}`);
+
+  // Handle text messages
+  if (messageType === "text") {
+    const text = message.text?.body || "";
+    const normalizedText = text.toLowerCase().trim();
+
+    // Check if user wants to see the report
+    if (normalizedText === "quiero ver el reporte" || normalizedText.includes("quiero ver")) {
+      await handleViewReportRequest(from);
+      return;
+    }
+  }
+
+  // Handle button/interactive messages
+  if (messageType === "interactive") {
+    const buttonId = message.interactive?.button_reply?.id;
+    const buttonText = message.interactive?.button_reply?.title;
+
+    if (buttonId === "view_report" || buttonText === "Ver reporte" || buttonText?.toLowerCase().includes("ver reporte")) {
+      await handleViewReportRequest(from);
+      return;
+    }
+  }
+
+  console.log(`[Webhook] Message not handled: ${messageType}`);
+}
+
+/**
+ * Handle "quiero ver el reporte" request
+ * Sends PDF and images to user via WhatsApp
+ */
+async function handleViewReportRequest(phoneNumber: string) {
+  try {
+    console.log(`[Webhook] Handling view report request from ${phoneNumber}`);
+
+    // Import here to avoid circular dependencies
+    const { getUserMostRecentReportByPhone } = await import("@/lib/firestore/admin");
+    const { sendWhatsAppDocument, sendWhatsAppImage } = await import("@/lib/whatsapp/meta");
+
+    // Get user's most recent report
+    const report = await getUserMostRecentReportByPhone(phoneNumber);
+
+    if (!report) {
+      console.log(`[Webhook] No report found for phone number: ${phoneNumber}`);
+      // Could send a message saying no report found, but we're in 24-hour window
+      return;
+    }
+
+    console.log(`[Webhook] Found report: ${report.id}, name: ${report.name || "N/A"}`);
+
+    // Send PDF if available
+    if (report.pdfUrl) {
+      const filename = `${report.name || "reporte"}.pdf`;
+      await sendWhatsAppDocument(phoneNumber, report.pdfUrl, filename);
+      console.log(`[Webhook] ✅ PDF sent to ${phoneNumber}`);
+    }
+
+    // Send individual images if available
+    if (report.imageUrls && report.imageUrls.length > 0) {
+      for (const img of report.imageUrls) {
+        await sendWhatsAppImage(phoneNumber, img.url);
+        console.log(`[Webhook] ✅ Image sent: ${img.areaName} - ${img.indexType}`);
+        // Small delay between images to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+
+    console.log(`[Webhook] ✅ All media sent to ${phoneNumber}`);
+  } catch (error: any) {
+    console.error(`[Webhook] ❌ Error handling view report request:`, error);
+    // Don't throw - we've already acknowledged the webhook
+  }
+}
+

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState, useEffect, useRef } from "react";
+import { useAuth } from "@/context/AuthContext";
 
 type FeatureType = "satellite" | "analysis" | "reports" | null;
 
@@ -20,6 +21,7 @@ interface Feature {
 }
 
 export default function Home() {
+  const { user, loading } = useAuth();
   const [selectedFeature, setSelectedFeature] = useState<FeatureType>(null);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -299,18 +301,31 @@ export default function Home() {
                 </div>
               </div>
               <div className="flex items-center space-x-2 md:space-x-4">
-                <Link
-                  href="/inicia-sesion"
-                  className="hidden sm:inline-block text-[#121212] hover:text-[#5db815] px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                >
-                  Inicia sesión
-                </Link>
-                <Link
-                  href="/registrarte"
-                  className="bg-[#5db815] text-white px-3 md:px-4 py-2 rounded-md text-sm font-medium hover:bg-[#4a9a11] transition-colors"
-                >
-                  Registrarte
-                </Link>
+                {!loading && (
+                  user ? (
+                    <Link
+                      href="/dashboard"
+                      className="bg-[#5db815] text-white px-3 md:px-4 py-2 rounded-md text-sm font-medium hover:bg-[#4a9a11] transition-colors"
+                    >
+                      Ir a mi cuenta
+                    </Link>
+                  ) : (
+                    <>
+                      <Link
+                        href="/inicia-sesion"
+                        className="hidden sm:inline-block text-[#121212] hover:text-[#5db815] px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                      >
+                        Inicia sesión
+                      </Link>
+                      <Link
+                        href="/registrarte"
+                        className="bg-[#5db815] text-white px-3 md:px-4 py-2 rounded-md text-sm font-medium hover:bg-[#4a9a11] transition-colors"
+                      >
+                        Registrarte
+                      </Link>
+                    </>
+                  )
+                )}
                 {/* Hamburger Menu Button */}
                 <button
                   onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -368,20 +383,34 @@ export default function Home() {
                 </Link>
               </div>
               <div className="border-t border-gray-200 p-6 mt-auto space-y-3">
-                <Link
-                  href="/inicia-sesion"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="block w-full text-center text-[#121212] hover:text-[#5db815] px-4 py-2 rounded-md text-sm font-medium transition-colors border border-gray-300"
-                >
-                  Inicia sesión
-                </Link>
-                <Link
-                  href="/registrarte"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="block w-full text-center bg-[#5db815] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#4a9a11] transition-colors"
-                >
-                  Registrarte
-                </Link>
+                {!loading && (
+                  user ? (
+                    <Link
+                      href="/dashboard"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="block w-full text-center bg-[#5db815] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#4a9a11] transition-colors"
+                    >
+                      Ir a mi cuenta
+                    </Link>
+                  ) : (
+                    <>
+                      <Link
+                        href="/inicia-sesion"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="block w-full text-center text-[#121212] hover:text-[#5db815] px-4 py-2 rounded-md text-sm font-medium transition-colors border border-gray-300"
+                      >
+                        Inicia sesión
+                      </Link>
+                      <Link
+                        href="/registrarte"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="block w-full text-center bg-[#5db815] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#4a9a11] transition-colors"
+                      >
+                        Registrarte
+                      </Link>
+                    </>
+                  )
+                )}
               </div>
             </div>
           </div>
@@ -398,18 +427,31 @@ export default function Home() {
             Conoce el sistema para el monitoreo agrícola moderno. Optimiza el seguimiento de áreas, proyectos y análisis de cultivos mediante imágenes satelitales.
           </p>
           <div className="mt-8 sm:mt-10 flex flex-col sm:flex-row justify-center items-center gap-3 sm:gap-4 sm:space-x-0">
-            <Link
-              href="/registrarte"
-              className="w-full sm:w-auto bg-white text-[#242424] px-6 sm:px-8 py-2.5 sm:py-3 rounded-lg text-base sm:text-lg font-semibold hover:bg-gray-100 transition-colors"
-            >
-              Comenzar Gratis
-            </Link>
-            <Link
-              href="/inicia-sesion"
-              className="w-full sm:w-auto text-[#242424] px-6 sm:px-8 py-2.5 sm:py-3 rounded-lg text-base sm:text-lg font-semibold hover:text-[#5db815] transition-colors"
-            >
-              Inicia sesión
-            </Link>
+            {!loading && (
+              user ? (
+                <Link
+                  href="/dashboard"
+                  className="w-full sm:w-auto bg-[#5db815] text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-lg text-base sm:text-lg font-semibold hover:bg-[#4a9a11] transition-colors"
+                >
+                  Ir a mi cuenta
+                </Link>
+              ) : (
+                <>
+                  <Link
+                    href="/registrarte"
+                    className="w-full sm:w-auto bg-white text-[#242424] px-6 sm:px-8 py-2.5 sm:py-3 rounded-lg text-base sm:text-lg font-semibold hover:bg-gray-100 transition-colors"
+                  >
+                    Comenzar Gratis
+                  </Link>
+                  <Link
+                    href="/inicia-sesion"
+                    className="w-full sm:w-auto text-[#242424] px-6 sm:px-8 py-2.5 sm:py-3 rounded-lg text-base sm:text-lg font-semibold hover:text-[#5db815] transition-colors"
+                  >
+                    Inicia sesión
+                  </Link>
+                </>
+              )
+            )}
           </div>
         </div>
 
@@ -1029,18 +1071,31 @@ export default function Home() {
               </p>
               </div>
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full sm:w-auto">
-                <Link
-                  href="/registrarte"
-                  className="bg-[#5db815] text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-lg text-base sm:text-lg font-semibold hover:bg-[#4a9a11] transition-colors whitespace-nowrap text-center"
-                >
-                  Comenzar gratis
-                </Link>
-                <Link
-                  href="/inicia-sesion"
-                  className="bg-white text-[#242424] border border-gray-300 px-6 sm:px-8 py-2.5 sm:py-3 rounded-lg text-base sm:text-lg font-semibold hover:bg-gray-50 hover:border-gray-400 transition-colors whitespace-nowrap text-center"
-                >
-                  Contactar ventas
-                </Link>
+                {!loading && (
+                  user ? (
+                    <Link
+                      href="/dashboard"
+                      className="bg-[#5db815] text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-lg text-base sm:text-lg font-semibold hover:bg-[#4a9a11] transition-colors whitespace-nowrap text-center"
+                    >
+                      Ir a mi cuenta
+                    </Link>
+                  ) : (
+                    <>
+                      <Link
+                        href="/registrarte"
+                        className="bg-[#5db815] text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-lg text-base sm:text-lg font-semibold hover:bg-[#4a9a11] transition-colors whitespace-nowrap text-center"
+                      >
+                        Comenzar gratis
+                      </Link>
+                      <Link
+                        href="/inicia-sesion"
+                        className="bg-white text-[#242424] border border-gray-300 px-6 sm:px-8 py-2.5 sm:py-3 rounded-lg text-base sm:text-lg font-semibold hover:bg-gray-50 hover:border-gray-400 transition-colors whitespace-nowrap text-center"
+                      >
+                        Contactar ventas
+                      </Link>
+                    </>
+                  )
+                )}
               </div>
             </div>
           </div>

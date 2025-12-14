@@ -138,4 +138,148 @@ export async function sendReportWhatsApp(
   await sendWhatsAppMessage(phoneNumber, "reporte_automatico", params);
 }
 
+/**
+ * Send report delivery notification via WhatsApp with PDF URL
+ * Uses "enviodereporte" template with nombre_reporte and pdf_url parameters
+ */
+export async function sendReportWhatsAppWithPDF(
+  phoneNumber: string,
+  reportName: string,
+  pdfUrl: string
+): Promise<void> {
+  console.log(`[WhatsApp] Sending report delivery notification:`);
+  console.log(`[WhatsApp]   - Report Name: ${reportName}`);
+  console.log(`[WhatsApp]   - PDF URL: ${pdfUrl}`);
+
+  // Send parameters: nombre_reporte and pdf_url
+  const params: Record<string, string> = {};
+  params.nombre_reporte = reportName;
+  params.pdf_url = pdfUrl;
+
+  await sendWhatsAppMessage(phoneNumber, "enviodereporte", params);
+}
+
+/**
+ * Send image via WhatsApp using direct URL
+ * No Media API upload needed - uses Firebase Storage public URL
+ */
+export async function sendWhatsAppImage(
+  to: string,
+  imageUrl: string
+): Promise<void> {
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+
+  if (!phoneNumberId) {
+    throw new Error("WHATSAPP_PHONE_NUMBER_ID is not set in environment variables");
+  }
+
+  if (!accessToken) {
+    throw new Error("WHATSAPP_ACCESS_TOKEN is not set in environment variables");
+  }
+
+  const payload = {
+    messaging_product: "whatsapp",
+    to: to.replace(/\D/g, ""), // Remove non-digits
+    type: "image",
+    image: {
+      link: imageUrl,
+    },
+  };
+
+  const url = `https://graph.facebook.com/v24.0/${phoneNumberId}/messages`;
+
+  console.log(`[WhatsApp] Sending image to ${to}...`);
+  console.log(`[WhatsApp] Image URL: ${imageUrl}`);
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[WhatsApp] ❌ API error: ${response.status} ${response.statusText}`);
+      console.error(`[WhatsApp] Error response:`, errorText);
+      throw new Error(
+        `WhatsApp API error: ${response.status} ${response.statusText} - ${errorText}`
+      );
+    }
+
+    const result = await response.json();
+    console.log(`[WhatsApp] ✅ Image sent successfully:`, JSON.stringify(result, null, 2));
+  } catch (error: any) {
+    console.error(`[WhatsApp] ❌ Failed to send image:`, error);
+    throw new Error(`Failed to send WhatsApp image: ${error.message || "Unknown error"}`);
+  }
+}
+
+/**
+ * Send document (PDF) via WhatsApp using direct URL
+ * No Media API upload needed - uses Firebase Storage public URL
+ */
+export async function sendWhatsAppDocument(
+  to: string,
+  pdfUrl: string,
+  filename: string
+): Promise<void> {
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+
+  if (!phoneNumberId) {
+    throw new Error("WHATSAPP_PHONE_NUMBER_ID is not set in environment variables");
+  }
+
+  if (!accessToken) {
+    throw new Error("WHATSAPP_ACCESS_TOKEN is not set in environment variables");
+  }
+
+  const payload = {
+    messaging_product: "whatsapp",
+    to: to.replace(/\D/g, ""), // Remove non-digits
+    type: "document",
+    document: {
+      link: pdfUrl,
+      filename: filename,
+    },
+  };
+
+  const url = `https://graph.facebook.com/v24.0/${phoneNumberId}/messages`;
+
+  console.log(`[WhatsApp] Sending document to ${to}...`);
+  console.log(`[WhatsApp] PDF URL: ${pdfUrl}`);
+  console.log(`[WhatsApp] Filename: ${filename}`);
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[WhatsApp] ❌ API error: ${response.status} ${response.statusText}`);
+      console.error(`[WhatsApp] Error response:`, errorText);
+      throw new Error(
+        `WhatsApp API error: ${response.status} ${response.statusText} - ${errorText}`
+      );
+    }
+
+    const result = await response.json();
+    console.log(`[WhatsApp] ✅ Document sent successfully:`, JSON.stringify(result, null, 2));
+  } catch (error: any) {
+    console.error(`[WhatsApp] ❌ Failed to send document:`, error);
+    throw new Error(`Failed to send WhatsApp document: ${error.message || "Unknown error"}`);
+  }
+}
+
 

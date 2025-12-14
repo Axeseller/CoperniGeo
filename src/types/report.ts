@@ -13,6 +13,9 @@ export interface Report {
   deliveryMethod: DeliveryMethod;
   email?: string; // Optional - required for email delivery
   phoneNumber?: string; // Optional - required for WhatsApp delivery
+  name?: string; // Optional - user-defined report name
+  pdfUrl?: string; // Optional - URL to PDF in Firebase Storage
+  imageUrls?: Array<{areaName: string; indexType: string; url: string}>; // Optional - URLs to images in Firebase Storage
   status: ReportStatus;
   lastGenerated?: Date | any;
   nextRun: Date | any;
@@ -27,5 +30,6 @@ export interface ReportFormData {
   deliveryMethod: DeliveryMethod;
   email?: string;
   phoneNumber?: string;
+  name?: string;
 }
 

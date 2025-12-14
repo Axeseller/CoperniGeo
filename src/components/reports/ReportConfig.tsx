@@ -29,6 +29,7 @@ export default function ReportConfig({ onSave, initialData }: ReportConfigProps)
     deliveryMethod: initialData?.deliveryMethod || "email",
     email: initialData?.email || user?.email || "",
     phoneNumber: initialData?.phoneNumber || "",
+    name: initialData?.name || "",
   });
 
   const loadAreas = useCallback(async () => {
@@ -211,6 +212,22 @@ export default function ReportConfig({ onSave, initialData }: ReportConfigProps)
           {successMessage}
         </div>
       )}
+
+      <div>
+        <label htmlFor="reportName" className="block text-sm font-medium text-[#242424] mb-1">
+          Nombre del reporte (opcional)
+        </label>
+        <input
+          id="reportName"
+          type="text"
+          value={formData.name || ""}
+          onChange={(e) =>
+            setFormData((prev) => ({ ...prev, name: e.target.value }))
+          }
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-[#5db815] focus:border-[#5db815] bg-gray-50 text-[#242424] placeholder-gray-400"
+          placeholder="Ej: Reporte Berries Enero"
+        />
+      </div>
 
       <div>
         <label className="block text-sm font-medium text-[#242424] mb-2">

@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getReportAdmin, markReportGeneratedAdmin, getAreaAdmin } from "@/lib/firestore/admin";
+import { getReportAdmin, markReportGeneratedAdmin, getAreaAdmin, updateReportAdmin } from "@/lib/firestore/admin";
 import { initializeEarthEngine, getEarthEngine } from "@/lib/earthEngine";
 import { calculateIndex, getSentinel2Collection, getMostRecentImage } from "@/lib/indices/calculations";
 import { sendEmail } from "@/lib/email/resend";
-import { sendReportWhatsApp } from "@/lib/whatsapp/meta";
+import { sendReportWhatsApp, sendReportWhatsAppWithPDF } from "@/lib/whatsapp/meta";
 import { generateReportPDF } from "@/lib/pdf/generateReportPDF";
 import { IndexType } from "@/types/report";
 import { getFrequencyLabel } from "@/lib/utils/reports";
 import { calculatePolygonArea, squareMetersToKm } from "@/lib/utils/geometry";
-import { uploadImageWithDedup } from "@/lib/storage/admin-upload";
+import { uploadImageWithDedup, uploadPDFAdmin } from "@/lib/storage/admin-upload";
 import { compositeIndexOverlay } from '@/lib/images/compositeImage';
 import { renderMapWithTiles } from '@/lib/images/tileRenderer';
 import sharp from 'sharp';
@@ -317,6 +317,7 @@ export async function POST(
     const emailHtml = emailResult.html;
     const imageAttachments = emailResult.attachments;
     const imageBuffers = emailResult.imageBuffers;
+    const uploadedImageUrls = emailResult.imageUrls; // Image URLs already uploaded to Firebase Storage
 
     // Generate PDF
     console.log(`[Report Send] Generating PDF for report ${report.id}...`);
@@ -358,17 +359,66 @@ export async function POST(
     const reportDate = new Date().toLocaleDateString("es-MX");
     
     if (report.deliveryMethod === "whatsapp") {
-      // For WhatsApp, we don't send the full report with images
-      // The WhatsApp template message was already sent when the report was created
-      // This endpoint is for email reports only
-      console.log(`[Report Send] Skipping report send for WhatsApp delivery method - confirmation was already sent when report was created`);
+      // Send via WhatsApp with PDF link
+      if (!report.phoneNumber) {
+        throw new Error("Phone number is required for WhatsApp delivery");
+      }
       
-      // Mark report as generated
-      await markReportGeneratedAdmin(report.id);
+      console.log(`[Report Send] Processing WhatsApp report for ${report.phoneNumber}...`);
       
+      try {
+        // Upload PDF to Firebase Storage
+        let pdfUrl: string | undefined;
+        if (pdfBuffer && pdfBuffer.length > 0) {
+          console.log(`[Report Send] Uploading PDF to Firebase Storage...`);
+          pdfUrl = await uploadPDFAdmin(report.id, pdfBuffer);
+          console.log(`[Report Send] ✅ PDF uploaded: ${pdfUrl}`);
+        } else {
+          console.log(`[Report Send] ⚠️ No PDF buffer available - skipping PDF upload`);
+        }
+
+        // Image URLs are already uploaded in generateReportEmail, use those
+        // uploadedImageUrls comes from emailResult above
+
+        // Update report with PDF URL and image URLs
+        const updateData: any = {};
+        if (pdfUrl) {
+          updateData.pdfUrl = pdfUrl;
+        }
+        if (uploadedImageUrls && uploadedImageUrls.length > 0) {
+          updateData.imageUrls = uploadedImageUrls;
+        }
+        
+        if (Object.keys(updateData).length > 0) {
+          await updateReportAdmin(report.id, updateData);
+          console.log(`[Report Send] ✅ Report updated with URLs`);
+        }
+
+        // Send WhatsApp template with PDF URL
+        const reportName = report.name || `Reporte ${getFrequencyLabel(report.frequency)}`;
+        if (pdfUrl) {
+          await sendReportWhatsAppWithPDF(
+            report.phoneNumber,
+            reportName,
+            pdfUrl
+          );
+          console.log(`[Report Send] ✅ WhatsApp template sent to ${report.phoneNumber}`);
+        } else {
+          throw new Error("PDF URL is required to send WhatsApp template");
+        }
+
+        // Mark report as generated
+        await markReportGeneratedAdmin(report.id);
+        
+        console.log(`[Report Send] ✅ WhatsApp report sent successfully for report ${report.id} to ${report.phoneNumber}`);
+      } catch (whatsappError: any) {
+        console.error(`[Report Send] ❌ WhatsApp sending failed:`, whatsappError);
+        throw new Error(`Failed to send WhatsApp report: ${whatsappError.message}`);
+      }
+
       return NextResponse.json({
         success: true,
-        message: "WhatsApp report confirmed (confirmation was sent when report was created)",
+        message: "WhatsApp report sent successfully",
         reportId: report.id,
       });
     } else {
@@ -573,7 +623,7 @@ async function generateReportEmail(
     centerLng?: number;
     coordinates?: { lat: number; lng: number }[]; // Add coordinates for composite generation
   }>
-): Promise<{ html: string; attachments: Array<{ filename: string; content: Buffer; contentType: string; cid?: string }>; imageBuffers: Buffer[] }> {
+): Promise<{ html: string; attachments: Array<{ filename: string; content: Buffer; contentType: string; cid?: string }>; imageBuffers: Buffer[]; imageUrls: Array<{areaName: string; indexType: string; url: string}> }> {
   const reportDate = new Date().toLocaleDateString("es-MX", {
     year: "numeric",
     month: "long",
@@ -588,6 +638,7 @@ async function generateReportEmail(
     cid?: string;
   }> = [];
   const imageBuffers: Buffer[] = []; // Store buffers for PDF generation
+  const imageUrls: Array<{areaName: string; indexType: string; url: string}> = []; // Store image URLs for WhatsApp
   
   console.log(`[Email] Starting to process ${imageData.length} images for email (uploading to Firebase Storage with Admin SDK)...`);
   for (let i = 0; i < imageData.length; i++) {
@@ -703,6 +754,13 @@ async function generateReportEmail(
         
         // Store buffer for PDF generation
         imageBuffers.push(finalImageBuffer);
+        
+        // Store image URL for WhatsApp
+        imageUrls.push({
+          areaName: data.areaName,
+          indexType: data.indexType,
+          url: imageUrl,
+        });
         
         // Get image dimensions to calculate aspect ratio
         const dimensions = await getImageDimensions(finalImageBuffer);
@@ -853,8 +911,9 @@ async function generateReportEmail(
   
   console.log(`[Email] Generated email HTML with ${imageAttachments.length} inline image attachments`);
   console.log(`[Email] Stored ${imageBuffers.length} image buffers for PDF generation`);
+  console.log(`[Email] Stored ${imageUrls.length} image URLs for WhatsApp`);
   
-  // Return HTML, attachments, and image buffers for PDF
-  return { html: emailHtml, attachments: imageAttachments, imageBuffers };
+  // Return HTML, attachments, image buffers for PDF, and image URLs for WhatsApp
+  return { html: emailHtml, attachments: imageAttachments, imageBuffers, imageUrls };
 }
 

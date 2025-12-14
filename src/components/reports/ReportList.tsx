@@ -76,7 +76,7 @@ export default function ReportList({ reports, onUpdate, onEdit }: ReportListProp
           <div className="flex justify-between items-start mb-2">
             <div>
               <h4 className="font-medium text-[#242424]">
-                Reporte {getFrequencyLabel(report.frequency)}
+                {report.name || `Reporte ${getFrequencyLabel(report.frequency)}`}
               </h4>
               <p className="text-sm text-[#898989]">
                 {report.deliveryMethod === "whatsapp" 

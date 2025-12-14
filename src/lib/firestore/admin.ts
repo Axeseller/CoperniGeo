@@ -164,3 +164,63 @@ export async function getDueReportsAdmin(): Promise<Report[]> {
   }
 }
 
+/**
+ * Get user's most recent report by phone number
+ * Orders by lastGenerated DESC and returns the first one
+ */
+export async function getUserMostRecentReportByPhone(phoneNumber: string): Promise<Report | null> {
+  try {
+    const db = getAdminFirestore();
+    
+    // Normalize phone number (remove non-digits)
+    const normalizedPhone = phoneNumber.replace(/\D/g, "");
+    
+    const querySnapshot = await db.collection('reports')
+      .where('phoneNumber', '==', normalizedPhone)
+      .where('deliveryMethod', '==', 'whatsapp')
+      .orderBy('lastGenerated', 'desc')
+      .limit(1)
+      .get();
+    
+    if (querySnapshot.empty) {
+      console.log(`[Admin Firestore] No reports found for phone number: ${normalizedPhone}`);
+      return null;
+    }
+    
+    const doc = querySnapshot.docs[0];
+    const data = doc.data();
+    
+    return {
+      id: doc.id,
+      ...data,
+      lastGenerated: data.lastGenerated?.toDate(),
+      nextRun: data.nextRun?.toDate(),
+      createdAt: data.createdAt?.toDate(),
+    } as Report;
+  } catch (error: any) {
+    console.error(`[Admin Firestore] Error fetching report by phone:`, error.message);
+    throw error;
+  }
+}
+
+/**
+ * Update a report using Admin SDK
+ * For server-side use only (API routes, cron jobs, etc.)
+ */
+export async function updateReportAdmin(
+  reportId: string,
+  updates: Partial<Report>
+): Promise<void> {
+  try {
+    const db = getAdminFirestore();
+    const docRef = db.collection('reports').doc(reportId);
+    
+    await docRef.update(updates);
+    
+    console.log(`[Admin Firestore] ✅ Report ${reportId} updated successfully`);
+  } catch (error: any) {
+    console.error(`[Admin Firestore] Error updating report:`, error.message);
+    throw error;
+  }
+}
+
