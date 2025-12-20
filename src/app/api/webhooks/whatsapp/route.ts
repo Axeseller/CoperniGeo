@@ -16,8 +16,19 @@ export async function GET(request: NextRequest) {
 
   const verifyToken = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
 
-  if (!verifyToken) {
-    console.error("[Webhook] WHATSAPP_WEBHOOK_VERIFY_TOKEN is not set");
+  // Debug logging (server-side only)
+  console.log("[Webhook] Verification request received", {
+    mode,
+    hasToken: !!token,
+    tokenLength: token?.length,
+    hasVerifyToken: !!verifyToken,
+    verifyTokenLength: verifyToken?.length,
+    challenge: challenge?.substring(0, 20) + "...",
+  });
+
+  if (!verifyToken || verifyToken.trim() === "") {
+    console.error("[Webhook] WHATSAPP_WEBHOOK_VERIFY_TOKEN is not set or empty");
+    console.error("[Webhook] Available env vars:", Object.keys(process.env).filter(k => k.includes("WHATSAPP")));
     return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
   }
 
@@ -26,7 +37,13 @@ export async function GET(request: NextRequest) {
     console.log("[Webhook] ✅ Webhook verified successfully");
     return new NextResponse(challenge, { status: 200 });
   } else {
-    console.error("[Webhook] ❌ Webhook verification failed", { mode, token, expected: verifyToken });
+    // Log failure details (but don't expose tokens in response)
+    console.error("[Webhook] ❌ Webhook verification failed", {
+      mode,
+      tokenMatch: token === verifyToken,
+      tokenLengthsMatch: token?.length === verifyToken?.length,
+      modeMatch: mode === "subscribe",
+    });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 }
