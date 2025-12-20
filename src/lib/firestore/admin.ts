@@ -212,16 +212,46 @@ export async function getUserMostRecentReportByPhone(phoneNumber: string): Promi
             .get();
           
           if (!allReports.empty) {
-            // Sort in memory by lastGenerated
+            // Sort in memory by lastGenerated (or createdAt if lastGenerated doesn't exist)
             const sortedDocs = allReports.docs.sort((a, b) => {
-              const aTime = a.data().lastGenerated?.toDate()?.getTime() || 0;
-              const bTime = b.data().lastGenerated?.toDate()?.getTime() || 0;
+              const aData = a.data();
+              const bData = b.data();
+              // Prefer lastGenerated, fallback to createdAt
+              const aTime = aData.lastGenerated?.toDate()?.getTime() || 
+                           aData.createdAt?.toDate()?.getTime() || 0;
+              const bTime = bData.lastGenerated?.toDate()?.getTime() || 
+                           bData.createdAt?.toDate()?.getTime() || 0;
               return bTime - aTime; // Descending
             });
             querySnapshot = { docs: [sortedDocs[0]], empty: false } as any;
           }
         } else {
           throw error;
+        }
+      }
+      
+      // If still empty, try fallback query without ordering (in case reports don't have lastGenerated)
+      if (querySnapshot.empty) {
+        console.log(`[Admin Firestore] Ordered query returned empty, trying fallback without ordering`);
+        const allReports = await db.collection('reports')
+          .where('phoneNumber', '==', alternativePhone)
+          .where('deliveryMethod', '==', 'whatsapp')
+          .get();
+        
+        if (!allReports.empty) {
+          // Sort in memory by lastGenerated (or createdAt if lastGenerated doesn't exist)
+          const sortedDocs = allReports.docs.sort((a, b) => {
+            const aData = a.data();
+            const bData = b.data();
+            // Prefer lastGenerated, fallback to createdAt
+            const aTime = aData.lastGenerated?.toDate()?.getTime() || 
+                         aData.createdAt?.toDate()?.getTime() || 0;
+            const bTime = bData.lastGenerated?.toDate()?.getTime() || 
+                         bData.createdAt?.toDate()?.getTime() || 0;
+            return bTime - aTime; // Descending
+          });
+          querySnapshot = { docs: [sortedDocs[0]], empty: false } as any;
+          console.log(`[Admin Firestore] ✅ Found report using fallback query: ${sortedDocs[0].id}`);
         }
       }
     }

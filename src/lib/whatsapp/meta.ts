@@ -4,12 +4,12 @@
 
 interface WhatsAppTemplateParams {
   type: "text";
-  parameter_name: string;
+  parameter_name?: string; // Optional - not needed for positional parameters ({{1}}, {{2}})
   text: string;
 }
 
 interface WhatsAppTemplateComponent {
-  type: "body";
+  type: "header" | "body";
   parameters: WhatsAppTemplateParams[];
 }
 
@@ -145,7 +145,9 @@ export async function sendReportWhatsApp(
 
 /**
  * Send report delivery notification via WhatsApp with PDF URL
- * Uses "enviodereporte" template with nombre_reporte and pdf_url parameters
+ * Uses "enviodereporte" template with header and body parameters
+ * Header {{1}}: report name
+ * Body {{1}}: PDF URL
  */
 export async function sendReportWhatsAppWithPDF(
   phoneNumber: string,
@@ -156,12 +158,82 @@ export async function sendReportWhatsAppWithPDF(
   console.log(`[WhatsApp]   - Report Name: ${reportName}`);
   console.log(`[WhatsApp]   - PDF URL: ${pdfUrl}`);
 
-  // Send parameters: nombre_reporte and pdf_url
-  const params: Record<string, string> = {};
-  params.nombre_reporte = reportName;
-  params.pdf_url = pdfUrl;
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
 
-  await sendWhatsAppMessage(phoneNumber, "enviodereporte", params);
+  if (!phoneNumberId) {
+    throw new Error("WHATSAPP_PHONE_NUMBER_ID is not set in environment variables");
+  }
+
+  if (!accessToken) {
+    throw new Error("WHATSAPP_ACCESS_TOKEN is not set in environment variables");
+  }
+
+  // Template has parameters in header and body
+  // Header {{1}}: report name
+  // Body {{1}}: PDF URL
+  const payload = {
+    messaging_product: "whatsapp",
+    to: phoneNumber.replace(/\D/g, ""), // Remove non-digits
+    type: "template",
+    template: {
+      name: "enviodereporte",
+      language: {
+        code: "es",
+      },
+      components: [
+        {
+          type: "header",
+          parameters: [
+            {
+              type: "text",
+              text: reportName,
+            },
+          ],
+        },
+        {
+          type: "body",
+          parameters: [
+            {
+              type: "text",
+              text: pdfUrl,
+            },
+          ],
+        },
+      ],
+    },
+  };
+
+  const url = `https://graph.facebook.com/v24.0/${phoneNumberId}/messages`;
+
+  console.log(`[WhatsApp] Sending message to ${phoneNumber} using template enviodereporte...`);
+  console.log(`[WhatsApp] Payload:`, JSON.stringify(payload, null, 2));
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[WhatsApp] ❌ API error: ${response.status} ${response.statusText}`);
+      console.error(`[WhatsApp] Error response:`, errorText);
+      throw new Error(
+        `WhatsApp API error: ${response.status} ${response.statusText} - ${errorText}`
+      );
+    }
+
+    const result = await response.json();
+    console.log(`[WhatsApp] ✅ Message sent successfully:`, JSON.stringify(result, null, 2));
+  } catch (error: any) {
+    console.error(`[WhatsApp] ❌ Failed to send message:`, error);
+    throw new Error(`Failed to send WhatsApp message: ${error.message || "Unknown error"}`);
+  }
 }
 
 /**
