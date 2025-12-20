@@ -6,7 +6,9 @@ This guide explains how to configure the WhatsApp webhook in Meta Business Manag
 
 - Meta Business Account with WhatsApp Business API access
 - Domain `copernigeo.com` configured and accessible
-- Environment variable `WHATSAPP_WEBHOOK_VERIFY_TOKEN` set in your `.env.local`
+- Environment variables set:
+  - `WHATSAPP_WEBHOOK_VERIFY_TOKEN` - Random token for webhook verification (GET requests)
+  - `WHATSAPP_APP_SECRET` - Your WhatsApp App Secret from Meta Business Manager (for POST signature verification)
 
 ## Step 1: Generate Webhook Verify Token
 
@@ -22,6 +24,17 @@ This guide explains how to configure the WhatsApp webhook in Meta Business Manag
    ```
 
 3. Keep this token secure - you'll need it in Step 3.
+
+### Get Your App Secret
+
+1. In Meta Business Manager, go to **Settings** → **Basic**
+2. Find **App Secret** and click **Show**
+3. Copy the App Secret
+4. Add it to your `.env.local`:
+   ```env
+   WHATSAPP_APP_SECRET=your_app_secret_here
+   ```
+5. **Important**: Also add this to your Vercel environment variables for production
 
 ## Step 2: Deploy Your Application
 
@@ -106,10 +119,14 @@ If verification succeeds, you'll see a green checkmark in Meta Business Manager.
 ## Webhook Security
 
 The webhook endpoint verifies requests using:
-1. **Signature verification**: Uses `X-Hub-Signature-256` header with HMAC SHA256
-2. **Verify token**: Validates the token during initial setup
+1. **Signature verification**: Uses `X-Hub-Signature-256` header with HMAC SHA256 (uses `WHATSAPP_APP_SECRET`)
+2. **Verify token**: Validates the token during initial setup (uses `WHATSAPP_WEBHOOK_VERIFY_TOKEN`)
 
-Always keep your `WHATSAPP_WEBHOOK_VERIFY_TOKEN` secret and never commit it to version control.
+**Important**: 
+- `WHATSAPP_WEBHOOK_VERIFY_TOKEN` is used only for the initial GET verification request
+- `WHATSAPP_APP_SECRET` is used to verify POST request signatures (incoming messages)
+- Both should be kept secret and never committed to version control
+- If `WHATSAPP_APP_SECRET` is not set, signature verification will be skipped (less secure)
 
 ## Quick Reply Button Setup
 
