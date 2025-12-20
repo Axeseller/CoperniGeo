@@ -102,10 +102,7 @@ export async function POST(request: NextRequest) {
 
       if (expectedSignature !== providedSignature) {
         console.error("[Webhook] ❌ Invalid signature - signatures do not match");
-        // For debugging: temporarily allow but log the mismatch
-        // TODO: Remove this after fixing the issue
-        console.warn("[Webhook] ⚠️ Temporarily allowing request for debugging - REMOVE THIS IN PRODUCTION");
-        // return NextResponse.json({ error: "Invalid signature" }, { status: 403 });
+        return NextResponse.json({ error: "Invalid signature" }, { status: 403 });
       } else {
         console.log("[Webhook] ✅ Signature verified successfully");
       }
@@ -160,10 +157,16 @@ async function handleIncomingMessage(message: any, contact: any) {
     const text = message.text?.body || "";
     const normalizedText = text.toLowerCase().trim();
 
+    console.log(`[Webhook] Message text: "${text}"`);
+    console.log(`[Webhook] Normalized text: "${normalizedText}"`);
+
     // Check if user wants to see the report
     if (normalizedText === "quiero ver el reporte" || normalizedText.includes("quiero ver")) {
+      console.log(`[Webhook] ✅ Matched report request pattern`);
       await handleViewReportRequest(from);
       return;
+    } else {
+      console.log(`[Webhook] Message does not match report request pattern`);
     }
   }
 

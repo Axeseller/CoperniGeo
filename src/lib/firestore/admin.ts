@@ -167,20 +167,55 @@ export async function getDueReportsAdmin(): Promise<Report[]> {
 /**
  * Get user's most recent report by phone number
  * Orders by lastGenerated DESC and returns the first one
+ * 
+ * Handles phone number format variations:
+ * - WhatsApp sends: 5213318450745 (with leading 1)
+ * - Database might store: 523318450745 (without leading 1)
  */
 export async function getUserMostRecentReportByPhone(phoneNumber: string): Promise<Report | null> {
   try {
     const db = getAdminFirestore();
     
     // Normalize phone number (remove non-digits)
-    const normalizedPhone = phoneNumber.replace(/\D/g, "");
+    let normalizedPhone = phoneNumber.replace(/\D/g, "");
     
-    const querySnapshot = await db.collection('reports')
+    console.log(`[Admin Firestore] Searching for phone number: ${normalizedPhone}`);
+    
+    // Try the number as-is first
+    let querySnapshot = await db.collection('reports')
       .where('phoneNumber', '==', normalizedPhone)
       .where('deliveryMethod', '==', 'whatsapp')
       .orderBy('lastGenerated', 'desc')
       .limit(1)
       .get();
+    
+    // If not found and number starts with "521" (Mexico country code + 1), try removing the "1"
+    // WhatsApp format: 5213318450745 -> Database format: 523318450745
+    if (querySnapshot.empty && normalizedPhone.startsWith('521') && normalizedPhone.length === 13) {
+      const alternativePhone = '52' + normalizedPhone.substring(3); // Remove the "1" after country code
+      console.log(`[Admin Firestore] Trying alternative format: ${alternativePhone}`);
+      
+      querySnapshot = await db.collection('reports')
+        .where('phoneNumber', '==', alternativePhone)
+        .where('deliveryMethod', '==', 'whatsapp')
+        .orderBy('lastGenerated', 'desc')
+        .limit(1)
+        .get();
+    }
+    
+    // If still not found, try the reverse: if it's 12 digits starting with "52", try adding "1"
+    // Database format: 523318450745 -> WhatsApp format: 5213318450745
+    if (querySnapshot.empty && normalizedPhone.startsWith('52') && normalizedPhone.length === 12) {
+      const alternativePhone = '521' + normalizedPhone.substring(2); // Add "1" after country code
+      console.log(`[Admin Firestore] Trying alternative format: ${alternativePhone}`);
+      
+      querySnapshot = await db.collection('reports')
+        .where('phoneNumber', '==', alternativePhone)
+        .where('deliveryMethod', '==', 'whatsapp')
+        .orderBy('lastGenerated', 'desc')
+        .limit(1)
+        .get();
+    }
     
     if (querySnapshot.empty) {
       console.log(`[Admin Firestore] No reports found for phone number: ${normalizedPhone}`);
@@ -189,6 +224,8 @@ export async function getUserMostRecentReportByPhone(phoneNumber: string): Promi
     
     const doc = querySnapshot.docs[0];
     const data = doc.data();
+    
+    console.log(`[Admin Firestore] ✅ Found report: ${doc.id} for phone: ${data.phoneNumber}`);
     
     return {
       id: doc.id,
