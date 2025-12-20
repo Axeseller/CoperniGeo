@@ -43,12 +43,14 @@ export async function POST(
     console.log(`[WhatsApp Confirm] Sending confirmation to ${report.phoneNumber}...`);
     console.log(`[WhatsApp Confirm] Indices: ${report.indices.join(", ")}`);
     console.log(`[WhatsApp Confirm] Areas: ${areaNames.join(", ")}`);
+    console.log(`[WhatsApp Confirm] Report Name: ${report.name || "N/A"}`);
 
     // Send WhatsApp confirmation message
     await sendReportWhatsApp(
       report.phoneNumber,
       report.indices,
-      areaNames
+      areaNames,
+      report.name
     );
 
     console.log(`[WhatsApp Confirm] ✅ Confirmation sent successfully to ${report.phoneNumber}`);

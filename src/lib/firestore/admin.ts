@@ -195,12 +195,35 @@ export async function getUserMostRecentReportByPhone(phoneNumber: string): Promi
       const alternativePhone = '52' + normalizedPhone.substring(3); // Remove the "1" after country code
       console.log(`[Admin Firestore] Trying alternative format: ${alternativePhone}`);
       
-      querySnapshot = await db.collection('reports')
-        .where('phoneNumber', '==', alternativePhone)
-        .where('deliveryMethod', '==', 'whatsapp')
-        .orderBy('lastGenerated', 'desc')
-        .limit(1)
-        .get();
+      try {
+        querySnapshot = await db.collection('reports')
+          .where('phoneNumber', '==', alternativePhone)
+          .where('deliveryMethod', '==', 'whatsapp')
+          .orderBy('lastGenerated', 'desc')
+          .limit(1)
+          .get();
+      } catch (error: any) {
+        // If index error, try without ordering as fallback
+        if (error.message?.includes('index') || error.code === 9) {
+          console.log(`[Admin Firestore] Index error, trying fallback query without ordering`);
+          const allReports = await db.collection('reports')
+            .where('phoneNumber', '==', alternativePhone)
+            .where('deliveryMethod', '==', 'whatsapp')
+            .get();
+          
+          if (!allReports.empty) {
+            // Sort in memory by lastGenerated
+            const sortedDocs = allReports.docs.sort((a, b) => {
+              const aTime = a.data().lastGenerated?.toDate()?.getTime() || 0;
+              const bTime = b.data().lastGenerated?.toDate()?.getTime() || 0;
+              return bTime - aTime; // Descending
+            });
+            querySnapshot = { docs: [sortedDocs[0]], empty: false } as any;
+          }
+        } else {
+          throw error;
+        }
+      }
     }
     
     // If still not found, try the reverse: if it's 12 digits starting with "52", try adding "1"
@@ -218,7 +241,50 @@ export async function getUserMostRecentReportByPhone(phoneNumber: string): Promi
     }
     
     if (querySnapshot.empty) {
+      // Debug: Check if any reports exist with this phone number (without filters)
       console.log(`[Admin Firestore] No reports found for phone number: ${normalizedPhone}`);
+      console.log(`[Admin Firestore] Debug: Checking if any reports exist with phone ${normalizedPhone}...`);
+      
+      try {
+        const debugQuery = await db.collection('reports')
+          .where('phoneNumber', '==', normalizedPhone)
+          .limit(5)
+          .get();
+        
+        if (!debugQuery.empty) {
+          console.log(`[Admin Firestore] Debug: Found ${debugQuery.docs.length} report(s) with phone ${normalizedPhone}, but deliveryMethod filter may not match`);
+          debugQuery.docs.forEach((doc, idx) => {
+            const data = doc.data();
+            console.log(`[Admin Firestore] Debug Report ${idx + 1}: id=${doc.id}, deliveryMethod=${data.deliveryMethod}, phoneNumber=${data.phoneNumber}`);
+          });
+        } else {
+          // Try the alternative format
+          const altPhone = normalizedPhone.startsWith('521') && normalizedPhone.length === 13 
+            ? '52' + normalizedPhone.substring(3)
+            : normalizedPhone.startsWith('52') && normalizedPhone.length === 12
+            ? '521' + normalizedPhone.substring(2)
+            : null;
+          
+          if (altPhone) {
+            console.log(`[Admin Firestore] Debug: Trying alternative format ${altPhone}...`);
+            const altDebugQuery = await db.collection('reports')
+              .where('phoneNumber', '==', altPhone)
+              .limit(5)
+              .get();
+            
+            if (!altDebugQuery.empty) {
+              console.log(`[Admin Firestore] Debug: Found ${altDebugQuery.docs.length} report(s) with phone ${altPhone}`);
+              altDebugQuery.docs.forEach((doc, idx) => {
+                const data = doc.data();
+                console.log(`[Admin Firestore] Debug Report ${idx + 1}: id=${doc.id}, deliveryMethod=${data.deliveryMethod}, phoneNumber=${data.phoneNumber}`);
+              });
+            }
+          }
+        }
+      } catch (debugError: any) {
+        console.error(`[Admin Firestore] Debug query error:`, debugError.message);
+      }
+      
       return null;
     }
     

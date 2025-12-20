@@ -110,7 +110,8 @@ export async function sendWhatsAppMessage(
 export async function sendReportWhatsApp(
   phoneNumber: string,
   indices: string[],
-  areas: string[]
+  areas: string[],
+  reportName?: string
 ): Promise<void> {
   // Format indices: "NDVI, NDRE y EVI"
   let indicesText = "";
@@ -125,15 +126,19 @@ export async function sendReportWhatsApp(
   // Format areas: "cerca de berries"
   const areasText = areas.length === 1 ? areas[0] : areas.join(", ");
 
+  // Use report name or default
+  const nombreReporte = reportName || "Reporte Automático";
+
   console.log(`[WhatsApp] Formatted message:`);
   console.log(`[WhatsApp]   - Indices: ${indicesText}`);
   console.log(`[WhatsApp]   - Areas: ${areasText}`);
+  console.log(`[WhatsApp]   - Report Name: ${nombreReporte}`);
 
-  // Send parameters in the correct order: indexes first, then areas
-  // Using an object with guaranteed property order
+  // Send parameters: indexes, areas, and nombre_reporte (3 parameters as expected by template)
   const params: Record<string, string> = {};
   params.indexes = indicesText;
   params.areas = areasText;
+  params.nombre_reporte = nombreReporte;
 
   await sendWhatsAppMessage(phoneNumber, "reporte_automatico", params);
 }

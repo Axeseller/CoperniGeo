@@ -107,17 +107,54 @@ export async function getReport(reportId: string): Promise<Report | null> {
 export async function createReport(
   report: Omit<Report, "id" | "nextRun" | "createdAt" | "lastGenerated">
 ): Promise<string> {
-  const nextRun = calculateNextRun(report.frequency);
-  
-  const db = getDb();
-  const reportData = {
-    ...report,
-    nextRun: Timestamp.fromDate(nextRun),
-    createdAt: Timestamp.now(),
-  };
-  
-  const docRef = await addDoc(collection(db, REPORTS_COLLECTION), reportData);
-  return docRef.id;
+  try {
+    const nextRun = calculateNextRun(report.frequency);
+    
+    // Normalize phone number if provided (remove all non-digits)
+    // This ensures consistent storage format
+    const normalizedReport = {
+      ...report,
+      phoneNumber: report.phoneNumber ? report.phoneNumber.replace(/\D/g, "") : undefined,
+    };
+    
+    const db = getDb();
+    const reportData = {
+      ...normalizedReport,
+      nextRun: Timestamp.fromDate(nextRun),
+      createdAt: Timestamp.now(),
+    };
+    
+    console.log("[Firestore] Creating report with data:", {
+      userId: reportData.userId,
+      deliveryMethod: reportData.deliveryMethod,
+      phoneNumber: reportData.phoneNumber,
+      email: reportData.email,
+      areaIds: reportData.areaIds?.length,
+      indices: reportData.indices,
+      frequency: reportData.frequency,
+      status: reportData.status,
+      hasName: !!reportData.name,
+      cloudCoverage: reportData.cloudCoverage,
+    });
+    
+    const docRef = await addDoc(collection(db, REPORTS_COLLECTION), reportData);
+    console.log("[Firestore] ✅ Report created successfully with ID:", docRef.id);
+    return docRef.id;
+  } catch (error: any) {
+    console.error("[Firestore] ❌ Error creating report:", error);
+    console.error("[Firestore] Error code:", error.code);
+    console.error("[Firestore] Error message:", error.message);
+    console.error("[Firestore] Error details:", error);
+    
+    // Provide more helpful error messages
+    if (error.code === "permission-denied") {
+      throw new Error("No tienes permiso para crear reportes. Verifica que estés autenticado.");
+    } else if (error.code === "invalid-argument") {
+      throw new Error("Los datos del reporte son inválidos. Verifica todos los campos.");
+    }
+    
+    throw error;
+  }
 }
 
 /**
