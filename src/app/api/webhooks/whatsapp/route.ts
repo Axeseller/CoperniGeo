@@ -175,7 +175,11 @@ async function handleIncomingMessage(message: any, contact: any) {
     const buttonId = message.interactive?.button_reply?.id;
     const buttonText = message.interactive?.button_reply?.title;
 
-    if (buttonId === "view_report" || buttonText === "Ver reporte" || buttonText?.toLowerCase().includes("ver reporte")) {
+    console.log(`[Webhook] Interactive message - Button ID: ${buttonId}, Button Text: ${buttonText}`);
+    console.log(`[Webhook] Full interactive payload:`, JSON.stringify(message.interactive, null, 2));
+
+    if (buttonId === "view_report" || buttonText === "Ver reporte" || buttonText?.toLowerCase().includes("ver reporte") || buttonText?.toLowerCase().includes("quiero ver")) {
+      console.log(`[Webhook] ✅ Matched button click for report request`);
       await handleViewReportRequest(from);
       return;
     }

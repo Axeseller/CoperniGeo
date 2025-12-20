@@ -22,16 +22,24 @@ async function getBrowser(): Promise<Browser> {
     // Use @sparticuz/chromium for serverless environments
     console.log('[TileRenderer] Using @sparticuz/chromium for serverless environment');
     
-    // Dynamic import to avoid bundling issues
-    const chromiumModule = await import('@sparticuz/chromium');
-    const chromium = chromiumModule.default || chromiumModule;
-    
-    browserInstance = await puppeteerCore.launch({
-      args: [...chromium.args, '--hide-scrollbars', '--disable-web-security'],
-      defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
-    });
+    try {
+      // Dynamic import to avoid bundling issues
+      const chromiumModule = await import('@sparticuz/chromium');
+      const chromium = chromiumModule.default || chromiumModule;
+      
+      const executablePath = await chromium.executablePath();
+      console.log(`[TileRenderer] Chromium executable path: ${executablePath}`);
+      
+      browserInstance = await puppeteerCore.launch({
+        args: [...chromium.args, '--hide-scrollbars', '--disable-web-security'],
+        defaultViewport: chromium.defaultViewport,
+        executablePath,
+        headless: chromium.headless,
+      });
+    } catch (chromiumError: any) {
+      console.error('[TileRenderer] Failed to load @sparticuz/chromium:', chromiumError.message);
+      throw new Error(`Failed to initialize Chromium for serverless: ${chromiumError.message}`);
+    }
   } else {
     // Use local Puppeteer for development
     console.log('[TileRenderer] Using local Puppeteer');
