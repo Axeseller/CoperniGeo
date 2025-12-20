@@ -31,7 +31,6 @@ async function getBrowser(): Promise<Browser> {
       defaultViewport: chromium.defaultViewport,
       executablePath: await chromium.executablePath(),
       headless: chromium.headless,
-      ignoreHTTPSErrors: true,
     });
   } else {
     // Use local Puppeteer for development
