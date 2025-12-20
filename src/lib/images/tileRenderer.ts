@@ -1,11 +1,12 @@
-import puppeteer from 'puppeteer';
-import type { Browser } from 'puppeteer';
+import puppeteerCore from 'puppeteer-core';
+import type { Browser } from 'puppeteer-core';
 
 let browserInstance: Browser | null = null;
 
 /**
  * Get or create a shared browser instance
  * Reusing the browser significantly improves performance
+ * Uses @sparticuz/chromium for serverless environments (Vercel)
  */
 async function getBrowser(): Promise<Browser> {
   if (browserInstance && browserInstance.connected) {
@@ -13,15 +14,40 @@ async function getBrowser(): Promise<Browser> {
   }
 
   console.log('[TileRenderer] Launching headless browser...');
-  browserInstance = await puppeteer.launch({
-    headless: true,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-    ],
-  });
+  
+  // Check if we're in a serverless environment (Vercel)
+  const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
+  
+  if (isServerless) {
+    // Use @sparticuz/chromium for serverless environments
+    console.log('[TileRenderer] Using @sparticuz/chromium for serverless environment');
+    
+    // Dynamic import to avoid bundling issues
+    const chromiumModule = await import('@sparticuz/chromium');
+    const chromium = chromiumModule.default || chromiumModule;
+    
+    browserInstance = await puppeteerCore.launch({
+      args: [...chromium.args, '--hide-scrollbars', '--disable-web-security'],
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+      ignoreHTTPSErrors: true,
+    });
+  } else {
+    // Use local Puppeteer for development
+    console.log('[TileRenderer] Using local Puppeteer');
+    const puppeteer = await import('puppeteer');
+    browserInstance = await puppeteer.default.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+      ],
+    });
+  }
+  
   console.log('[TileRenderer] ✅ Browser launched');
   
   return browserInstance;

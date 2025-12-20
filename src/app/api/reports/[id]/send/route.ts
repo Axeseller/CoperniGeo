@@ -721,7 +721,13 @@ async function generateReportEmail(
         console.log(`[Email] ✅ Tile-based image rendered (${finalImageBuffer.length} bytes)`);
         contentType = 'image/png';
       } catch (renderError: any) {
-        console.error(`[Email] Failed to render map with tiles: ${renderError.message}`);
+        // Chrome/Puppeteer not available in Vercel - this is expected, fallback handles it
+        const isChromeError = renderError.message?.includes('Chrome') || renderError.message?.includes('puppeteer');
+        if (isChromeError) {
+          console.log(`[Email] ⚠️ Tile rendering not available (Chrome/Puppeteer not found in serverless environment)`);
+        } else {
+          console.error(`[Email] Failed to render map with tiles: ${renderError.message}`);
+        }
         console.log(`[Email] Falling back to Earth Engine composite approach...`);
         
         // Fallback: Try Earth Engine composite if tile rendering fails
