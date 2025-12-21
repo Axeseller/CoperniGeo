@@ -16,7 +16,7 @@ import sharp from 'sharp';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120; // Allow up to 120 seconds for processing (reports may take longer)
 
-// v3.2 - Google Maps background + Earth Engine overlay (high quality, resized for alignment)
+// v3.3 - Google Maps background + EE overlay generated for exact Google Maps bounds (perfect alignment)
 
 /**
  * POST /api/reports/[id]/send
@@ -727,26 +727,66 @@ async function generateReportEmail(
         console.log(`[Email] Tile rendering failed: ${renderError.message}`);
         console.log(`[Email] Falling back to Google Maps + Earth Engine composite...`);
         
-        // Fallback: Use Google Maps for high-quality background, resize EE overlay to match
-        if (overlayBuffer && data.coordinates && data.coordinates.length >= 3) {
+        // Fallback: Use Google Maps for high-quality background, generate EE overlay for exact bounds
+        if (data.coordinates && data.coordinates.length >= 3) {
           try {
-            // Step 1: Fetch high-quality Google Maps satellite
+            // Step 1: Fetch high-quality Google Maps satellite and get its EXACT bounds
             console.log(`[Email] Fetching Google Maps satellite...`);
             const gmaps = await fetchGoogleMapsSatelliteWithBounds(data.coordinates, 1200);
             console.log(`[Email] ✅ Google Maps fetched (${gmaps.buffer.length} bytes, ${gmaps.width}x${gmaps.height})`);
+            console.log(`[Email] Google Maps bounds: [${gmaps.bounds.minLng.toFixed(6)}, ${gmaps.bounds.minLat.toFixed(6)}, ${gmaps.bounds.maxLng.toFixed(6)}, ${gmaps.bounds.maxLat.toFixed(6)}]`);
             
-            // Step 2: Resize the already-downloaded EE overlay to match Google Maps dimensions
-            // This is fast (no Earth Engine API calls) and maintains alignment
-            console.log(`[Email] Resizing Earth Engine overlay to match Google Maps dimensions...`);
-            const resizedOverlay = await sharp(overlayBuffer)
-              .resize(gmaps.width, gmaps.height, { fit: 'fill' })
-              .toBuffer();
-            console.log(`[Email] ✅ Overlay resized to ${gmaps.width}x${gmaps.height}`);
+            // Step 2: Generate Earth Engine overlay for the EXACT Google Maps bounds
+            console.log(`[Email] Generating Earth Engine overlay for exact Google Maps bounds...`);
+            const ee = getEarthEngine();
             
-            // Step 3: Composite them together
+            // Create region from exact Google Maps bounds
+            const exactRegion = ee.Geometry.Polygon([[
+              [gmaps.bounds.minLng, gmaps.bounds.minLat],
+              [gmaps.bounds.maxLng, gmaps.bounds.minLat],
+              [gmaps.bounds.maxLng, gmaps.bounds.maxLat],
+              [gmaps.bounds.minLng, gmaps.bounds.maxLat],
+              [gmaps.bounds.minLng, gmaps.bounds.minLat],
+            ]]);
+            
+            // Get fresh Sentinel-2 data and calculate index
+            const collection = getSentinel2Collection(100); // 100% to not filter
+            const recentImage = getMostRecentImage(collection);
+            const indexImg = calculateIndex(recentImage, data.indexType as any);
+            
+            // Generate thumbnail for EXACT Google Maps bounds with EXACT dimensions
+            const alignedOverlayUrl = await new Promise<string>((resolve, reject) => {
+              const timeout = setTimeout(() => reject(new Error('Overlay generation timeout')), 30000);
+              (indexImg as any).getThumbURL({
+                dimensions: [gmaps.width, gmaps.height],
+                format: 'png',
+                region: exactRegion,
+                min: data.stats.min,
+                max: data.stats.max,
+                palette: data.indexType === "NDVI" || data.indexType === "NDRE"
+                  ? ["red", "yellow", "green"]
+                  : ["blue", "cyan", "yellow", "orange", "red"],
+              }, (url: string, error?: Error) => {
+                clearTimeout(timeout);
+                if (error) reject(error);
+                else resolve(url);
+              });
+            });
+            
+            // Download the aligned overlay
+            const overlayResponse = await fetch(alignedOverlayUrl, {
+              headers: { 'User-Agent': 'CoperniGeo-Email-Service/1.0' },
+            });
+            if (!overlayResponse.ok) {
+              throw new Error(`Failed to download overlay: ${overlayResponse.status}`);
+            }
+            const alignedOverlayBuffer = Buffer.from(await overlayResponse.arrayBuffer());
+            console.log(`[Email] ✅ Aligned overlay downloaded (${alignedOverlayBuffer.length} bytes)`);
+            
+            // Step 3: Composite them together (overlay is now perfectly aligned!)
             finalImageBuffer = await compositeIndexOverlay(
               gmaps.buffer,
-              resizedOverlay,
+              alignedOverlayBuffer,
               data.coordinates,
               0.7,
               '#5db815'
@@ -773,7 +813,7 @@ async function generateReportEmail(
             }
           }
         } else {
-          console.log(`[Email] Missing overlay buffer or coordinates for composite`);
+          console.log(`[Email] Missing coordinates for composite`);
         }
       }
     } else {
