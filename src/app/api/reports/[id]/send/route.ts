@@ -9,14 +9,14 @@ import { IndexType } from "@/types/report";
 import { getFrequencyLabel } from "@/lib/utils/reports";
 import { calculatePolygonArea, squareMetersToKm } from "@/lib/utils/geometry";
 import { uploadImageWithDedup, uploadPDFAdmin } from "@/lib/storage/admin-upload";
-import { compositeIndexOverlay, fetchGoogleMapsSatelliteWithBounds } from '@/lib/images/compositeImage';
+import { compositeIndexOverlay, fetchGoogleMapsSatelliteSimple, calculateBoundingBox } from '@/lib/images/compositeImage';
 import { renderMapWithTiles } from '@/lib/images/tileRenderer';
 import sharp from 'sharp';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120; // Allow up to 120 seconds for processing (reports may take longer)
 
-// v3.3 - Google Maps background + EE overlay generated for exact Google Maps bounds (perfect alignment)
+// v3.5 - Google Maps (visible param) + Earth Engine overlay with SAME bounds = perfect alignment
 
 /**
  * POST /api/reports/[id]/send
@@ -723,83 +723,35 @@ async function generateReportEmail(
         console.log(`[Email] ✅ Tile-based image rendered (${finalImageBuffer.length} bytes)`);
         contentType = 'image/png';
       } catch (renderError: any) {
-        // Chrome/Puppeteer not available in Vercel - this is expected, fallback handles it
-        console.log(`[Email] Tile rendering failed: ${renderError.message}`);
+        // Chrome/Puppeteer not available in Vercel - this is expected
+        console.error(`[Email] Failed to render map with tiles: ${renderError.message}`);
         console.log(`[Email] Falling back to Google Maps + Earth Engine composite...`);
         
-        // Fallback: Use Google Maps for high-quality background, generate EE overlay for exact bounds
-        if (data.coordinates && data.coordinates.length >= 3) {
+        // Fallback: Google Maps background + Earth Engine overlay
+        // KEY: Both use SAME bounds (5% padding) for perfect alignment!
+        if (overlayBuffer && data.coordinates && data.coordinates.length >= 3) {
           try {
-            // Step 1: Fetch high-quality Google Maps satellite and get its EXACT bounds
-            console.log(`[Email] Fetching Google Maps satellite...`);
-            const gmaps = await fetchGoogleMapsSatelliteWithBounds(data.coordinates, 1200);
-            console.log(`[Email] ✅ Google Maps fetched (${gmaps.buffer.length} bytes, ${gmaps.width}x${gmaps.height})`);
-            console.log(`[Email] Google Maps bounds: [${gmaps.bounds.minLng.toFixed(6)}, ${gmaps.bounds.minLat.toFixed(6)}, ${gmaps.bounds.maxLng.toFixed(6)}, ${gmaps.bounds.maxLat.toFixed(6)}]`);
+            // Calculate bounds with 5% padding - SAME as Earth Engine uses
+            const bounds = calculateBoundingBox(data.coordinates, 5);
+            console.log(`[Email] Using bounds (5% padding): [${bounds.minLng.toFixed(6)}, ${bounds.minLat.toFixed(6)}, ${bounds.maxLng.toFixed(6)}, ${bounds.maxLat.toFixed(6)}]`);
             
-            // Step 2: Generate Earth Engine overlay for the EXACT Google Maps bounds
-            console.log(`[Email] Generating Earth Engine overlay for exact Google Maps bounds...`);
-            const ee = getEarthEngine();
+            // Fetch Google Maps with 'visible' parameter for EXACT bounds
+            const googleMapsBuffer = await fetchGoogleMapsSatelliteSimple(bounds, 640);
+            console.log(`[Email] ✅ Google Maps fetched (${googleMapsBuffer.length} bytes)`);
             
-            // Create region from exact Google Maps bounds
-            const exactRegion = ee.Geometry.Polygon([[
-              [gmaps.bounds.minLng, gmaps.bounds.minLat],
-              [gmaps.bounds.maxLng, gmaps.bounds.minLat],
-              [gmaps.bounds.maxLng, gmaps.bounds.maxLat],
-              [gmaps.bounds.minLng, gmaps.bounds.maxLat],
-              [gmaps.bounds.minLng, gmaps.bounds.minLat],
-            ]]);
-            
-            // Get Sentinel-2 data filtered by the exact region
-            const collection = getSentinel2Collection(100)
-              .filterBounds(exactRegion); // IMPORTANT: filter by bounds!
-            const recentImage = getMostRecentImage(collection);
-            const indexImg = calculateIndex(recentImage, data.indexType as any)
-              .clip(exactRegion); // Clip to exact bounds
-            
-            // Generate thumbnail for EXACT Google Maps bounds with EXACT dimensions
-            const alignedOverlayUrl = await new Promise<string>((resolve, reject) => {
-              const timeout = setTimeout(() => reject(new Error('Overlay generation timeout')), 30000);
-              (indexImg as any).getThumbURL({
-                dimensions: [gmaps.width, gmaps.height],
-                format: 'png',
-                region: exactRegion,
-                min: data.stats.min,
-                max: data.stats.max,
-                palette: data.indexType === "NDVI" || data.indexType === "NDRE"
-                  ? ["red", "yellow", "green"]
-                  : ["blue", "cyan", "yellow", "orange", "red"],
-              }, (url: string, error?: Error) => {
-                clearTimeout(timeout);
-                if (error) reject(error);
-                else resolve(url);
-              });
-            });
-            
-            // Download the aligned overlay
-            const overlayResponse = await fetch(alignedOverlayUrl, {
-              headers: { 'User-Agent': 'CoperniGeo-Email-Service/1.0' },
-            });
-            if (!overlayResponse.ok) {
-              throw new Error(`Failed to download overlay: ${overlayResponse.status}`);
-            }
-            const alignedOverlayBuffer = Buffer.from(await overlayResponse.arrayBuffer());
-            console.log(`[Email] ✅ Aligned overlay downloaded (${alignedOverlayBuffer.length} bytes)`);
-            
-            // Step 3: Composite them together (overlay is now perfectly aligned!)
-            // Pass Google Maps bounds so mask is positioned correctly!
+            // Composite: Google Maps (high quality) + Earth Engine overlay (same bounds)
             finalImageBuffer = await compositeIndexOverlay(
-              gmaps.buffer,
-              alignedOverlayBuffer,
+              googleMapsBuffer,
+              overlayBuffer, // Already generated with same 5% padding bounds
               data.coordinates,
               0.7,
-              '#5db815',
-              gmaps.bounds // Use Google Maps bounds for correct mask positioning
+              '#5db815'
             );
-            console.log(`[Email] ✅ High-quality Google Maps composite generated (${finalImageBuffer.length} bytes)`);
+            console.log(`[Email] ✅ Google Maps + EE composite generated (${finalImageBuffer.length} bytes)`);
           } catch (gmapsError: any) {
             console.error(`[Email] Google Maps composite failed: ${gmapsError.message}`);
             
-            // Final fallback: Earth Engine only (lower quality but guaranteed to work)
+            // Final fallback: Earth Engine only
             if (baseBuffer && overlayBuffer) {
               try {
                 console.log(`[Email] Final fallback: Earth Engine-only composite...`);
@@ -816,8 +768,6 @@ async function generateReportEmail(
               }
             }
           }
-        } else {
-          console.log(`[Email] Missing coordinates for composite`);
         }
       }
     } else {

@@ -36,6 +36,52 @@ export function calculateBoundingBox(
 }
 
 /**
+ * Fetch Google Maps satellite image using 'visible' parameter for EXACT bounds matching
+ * This ensures the image covers exactly the same area as Earth Engine thumbnails
+ */
+export async function fetchGoogleMapsSatelliteSimple(
+  bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number },
+  size: number = 640 // Max is 640, use scale=2 for 1280
+): Promise<Buffer> {
+  let apiKey = process.env.GOOGLE_MAPS_SERVER_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  
+  if (!apiKey) {
+    throw new Error('Google Maps API key is not configured');
+  }
+  apiKey = apiKey.trim();
+  
+  console.log(`[GoogleMaps] Using API key: ${apiKey.substring(0, 10)}... (length: ${apiKey.length})`);
+  console.log(`[GoogleMaps] Fetching for exact bounds: [${bounds.minLng.toFixed(6)}, ${bounds.minLat.toFixed(6)}, ${bounds.maxLng.toFixed(6)}, ${bounds.maxLat.toFixed(6)}]`);
+
+  // Use 'visible' parameter to force Google Maps to show EXACT bounding box
+  // This ensures the returned image covers exactly the same area as Earth Engine
+  const url = new URL('https://maps.googleapis.com/maps/api/staticmap');
+  
+  // visible parameter with SW and NE corners forces exact bounds
+  const visiblePath = `${bounds.minLat},${bounds.minLng}|${bounds.maxLat},${bounds.maxLng}`;
+  url.searchParams.set('visible', visiblePath);
+  url.searchParams.set('size', `${size}x${size}`);
+  url.searchParams.set('scale', '2'); // 2x for higher resolution (1280x1280)
+  url.searchParams.set('maptype', 'satellite');
+  url.searchParams.set('key', apiKey);
+
+  console.log(`[GoogleMaps] URL: ${url.toString().substring(0, 150)}...`);
+
+  const response = await fetch(url.toString());
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Google Maps API error: ${response.status} - ${errorText.substring(0, 200)}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  
+  console.log(`[GoogleMaps] ✅ Satellite image fetched (${buffer.length} bytes)`);
+  return buffer;
+}
+
+/**
  * Calculate the optimal zoom level for a bounding box to fit in given dimensions
  */
 function calculateZoomLevel(
@@ -287,8 +333,7 @@ export async function compositeIndexOverlay(
   overlayImageBuffer: Buffer,
   coordinates: { lat: number; lng: number }[],
   opacity: number = 0.7,
-  polygonColor: string = '#5db815',
-  customBounds?: { minLat: number; maxLat: number; minLng: number; maxLng: number }
+  polygonColor: string = '#5db815'
 ): Promise<Buffer> {
   try {
     console.log(`[Composite] Starting Earth Engine image composition...`);
@@ -313,9 +358,9 @@ export async function compositeIndexOverlay(
 
     console.log(`[Composite] Overlay resized to match base image`);
 
-    // Use custom bounds if provided (e.g., from Google Maps), otherwise calculate with 5% padding
-    const bounds = customBounds || calculateBoundingBox(coordinates, 5);
-    console.log(`[Composite] Using bounds: [${bounds.minLng.toFixed(6)}, ${bounds.minLat.toFixed(6)}, ${bounds.maxLng.toFixed(6)}, ${bounds.maxLat.toFixed(6)}]`);
+    // Calculate bounding box with 5% padding - SAME as Earth Engine generation
+    // This is critical for alignment!
+    const bounds = calculateBoundingBox(coordinates, 5);
 
     // Generate polygon outline
     const polygonSVG = generatePolygonSVG(
