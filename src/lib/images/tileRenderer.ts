@@ -1,12 +1,12 @@
-import puppeteerCore from 'puppeteer-core';
+import puppeteer from 'puppeteer-core';
+import chromium from '@sparticuz/chromium';
 
-// Use any for browser type to avoid version mismatches between puppeteer-core and puppeteer
+// Use any for browser type to avoid version mismatches
 let browserInstance: any = null;
 
 /**
  * Get or create a shared browser instance
- * Reusing the browser significantly improves performance
- * Uses @sparticuz/chromium for serverless environments (Vercel)
+ * Uses @sparticuz/chromium on Vercel, local puppeteer for development
  */
 async function getBrowser(): Promise<any> {
   if (browserInstance && browserInstance.connected) {
@@ -15,43 +15,26 @@ async function getBrowser(): Promise<any> {
 
   console.log('[TileRenderer] Launching headless browser...');
   
-  // Check if we're in a serverless environment (Vercel)
-  const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
-  
-  if (isServerless) {
-    // Use @sparticuz/chromium for serverless environments
-    console.log('[TileRenderer] Using @sparticuz/chromium for serverless environment');
+  // Use the provided Chromium executable path on Vercel
+  if (process.env.VERCEL) {
+    console.log('[TileRenderer] Using @sparticuz/chromium for Vercel');
     
-    try {
-      // Dynamic import to avoid bundling issues
-      const chromiumModule = await import('@sparticuz/chromium');
-      const chromium = chromiumModule.default || chromiumModule;
-      
-      const executablePath = await chromium.executablePath();
-      console.log(`[TileRenderer] Chromium executable path: ${executablePath}`);
-      
-      browserInstance = await puppeteerCore.launch({
-        args: [...chromium.args, '--hide-scrollbars', '--disable-web-security'],
-        defaultViewport: chromium.defaultViewport,
-        executablePath,
-        headless: chromium.headless,
-      });
-    } catch (chromiumError: any) {
-      console.error('[TileRenderer] Failed to load @sparticuz/chromium:', chromiumError.message);
-      throw new Error(`Failed to initialize Chromium for serverless: ${chromiumError.message}`);
-    }
+    const executablePath = await chromium.executablePath();
+    console.log(`[TileRenderer] Chromium executable path: ${executablePath}`);
+    
+    browserInstance = await puppeteer.launch({
+      args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox'],
+      defaultViewport: chromium.defaultViewport,
+      executablePath: executablePath,
+      headless: chromium.headless,
+    });
   } else {
-    // Use local Puppeteer for development
-    console.log('[TileRenderer] Using local Puppeteer');
-    const puppeteer = await import('puppeteer');
-    browserInstance = await puppeteer.default.launch({
+    // Use local puppeteer for development
+    console.log('[TileRenderer] Using local Puppeteer for development');
+    const puppeteerLocal = await import('puppeteer');
+    browserInstance = await puppeteerLocal.default.launch({
       headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-      ],
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
   }
   
