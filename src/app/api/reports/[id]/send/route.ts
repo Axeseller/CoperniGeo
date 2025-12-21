@@ -9,14 +9,14 @@ import { IndexType } from "@/types/report";
 import { getFrequencyLabel } from "@/lib/utils/reports";
 import { calculatePolygonArea, squareMetersToKm } from "@/lib/utils/geometry";
 import { uploadImageWithDedup, uploadPDFAdmin } from "@/lib/storage/admin-upload";
-import { compositeIndexOverlay, fetchGoogleMapsSatelliteImage, calculateBoundingBox } from '@/lib/images/compositeImage';
+import { compositeIndexOverlay } from '@/lib/images/compositeImage';
 import { renderMapWithTiles } from '@/lib/images/tileRenderer';
 import sharp from 'sharp';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120; // Allow up to 120 seconds for processing (reports may take longer)
 
-// v2.0 - Google Maps satellite fallback with polygon masking
+// v3.1 - Earth Engine composite (same approach that worked on Dec 14, 2025)
 
 /**
  * POST /api/reports/[id]/send
@@ -724,68 +724,26 @@ async function generateReportEmail(
         contentType = 'image/png';
       } catch (renderError: any) {
         // Chrome/Puppeteer not available in Vercel - this is expected, fallback handles it
-        const isChromeError = renderError.message?.includes('Chrome') || renderError.message?.includes('puppeteer');
-        if (isChromeError) {
-          console.log(`[Email] ⚠️ Tile rendering not available (Chrome/Puppeteer not found in serverless environment)`);
-        } else {
-          console.error(`[Email] Failed to render map with tiles: ${renderError.message}`);
-        }
-        console.log(`[Email] Falling back to Google Maps + Earth Engine composite approach...`);
+        console.log(`[Email] Tile rendering failed: ${renderError.message}`);
+        console.log(`[Email] Falling back to Earth Engine composite (guaranteed alignment)...`);
         
-        // Fallback: Use Google Maps for base satellite (high quality) + Earth Engine overlay
-        if (overlayBuffer && data.coordinates && data.coordinates.length >= 3) {
+        // Fallback: Use Earth Engine for BOTH base satellite and index overlay
+        // This ensures perfect alignment since both images use the same coordinate system
+        if (baseBuffer && overlayBuffer && data.coordinates && data.coordinates.length >= 3) {
           try {
-            // Calculate bounds from polygon coordinates
-            const bounds = calculateBoundingBox(data.coordinates, 5);
-            
-            // Fetch high-quality satellite image from Google Maps Static API
-            console.log(`[Email] Fetching Google Maps satellite image...`);
-            let googleMapsBuffer: Buffer;
-            try {
-              googleMapsBuffer = await fetchGoogleMapsSatelliteImage(bounds, 1200);
-              console.log(`[Email] ✅ Google Maps satellite fetched (${googleMapsBuffer.length} bytes)`);
-            } catch (gmapsError: any) {
-              console.log(`[Email] Google Maps failed: ${gmapsError.message}, using Earth Engine base`);
-              // Fall back to Earth Engine base if Google Maps fails
-              if (!baseBuffer) {
-                throw new Error('No base satellite image available');
-              }
-              googleMapsBuffer = baseBuffer;
-            }
-            
-            // Resize overlay to match Google Maps image dimensions
-            const gmapsMetadata = await sharp(googleMapsBuffer).metadata();
-            const overlayResized = await sharp(overlayBuffer)
-              .resize(gmapsMetadata.width, gmapsMetadata.height, { fit: 'fill' })
-              .toBuffer();
-            
             finalImageBuffer = await compositeIndexOverlay(
-              googleMapsBuffer,
-              overlayResized,
+              baseBuffer,
+              overlayBuffer,
               data.coordinates,
               0.7,
               '#5db815'
             );
-            console.log(`[Email] ✅ Google Maps composite generated (${finalImageBuffer.length} bytes)`);
+            console.log(`[Email] ✅ Earth Engine composite generated (${finalImageBuffer.length} bytes)`);
           } catch (compositeError: any) {
-            console.error(`[Email] Fallback composite failed: ${compositeError.message}`);
-            
-            // Last resort: use Earth Engine base
-            if (baseBuffer && overlayBuffer) {
-              try {
-                finalImageBuffer = await compositeIndexOverlay(
-                  baseBuffer,
-                  overlayBuffer,
-                  data.coordinates,
-                  0.7,
-                  '#5db815'
-                );
-                console.log(`[Email] ✅ Earth Engine fallback composite generated (${finalImageBuffer.length} bytes)`);
-              } catch (eeError: any) {
-                console.error(`[Email] Earth Engine composite also failed: ${eeError.message}`);
-              }
-            }
+            console.error(`[Email] Earth Engine composite failed: ${compositeError.message}`);
           }
+        } else {
+          console.log(`[Email] Missing base/overlay buffers or coordinates for composite`);
         }
       }
     } else {

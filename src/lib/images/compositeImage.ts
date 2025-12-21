@@ -36,125 +36,164 @@ export function calculateBoundingBox(
 }
 
 /**
- * Fetch Google Maps Static API satellite image for bounding box
- * Calculates proper dimensions to match Earth Engine's aspect ratio
- * @param bounds - The bounding box to fetch
- * @param maxDimension - The maximum dimension (like Earth Engine's dimensions: 1200)
+ * Calculate the optimal zoom level for a bounding box to fit in given dimensions
  */
-export async function fetchGoogleMapsSatelliteImage(
+function calculateZoomLevel(
   bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number },
-  maxDimension: number = 1200
-): Promise<Buffer> {
+  width: number,
+  height: number
+): number {
+  const WORLD_DIM = 256;
+  const ZOOM_MAX = 21;
+
+  const latRange = bounds.maxLat - bounds.minLat;
+  const lngRange = bounds.maxLng - bounds.minLng;
+
+  // Calculate zoom for longitude
+  const lngZoom = Math.log2((width * 360) / (lngRange * WORLD_DIM));
+  
+  // Calculate zoom for latitude (accounting for Mercator projection)
+  const latRad1 = bounds.minLat * Math.PI / 180;
+  const latRad2 = bounds.maxLat * Math.PI / 180;
+  const yMin = Math.log(Math.tan(Math.PI / 4 + latRad1 / 2));
+  const yMax = Math.log(Math.tan(Math.PI / 4 + latRad2 / 2));
+  const yRange = Math.abs(yMax - yMin);
+  const latZoom = Math.log2((height * 2 * Math.PI) / (yRange * WORLD_DIM));
+
+  // Use the smaller zoom to ensure everything fits, then floor it
+  const zoom = Math.min(lngZoom, latZoom, ZOOM_MAX);
+  return Math.floor(zoom);
+}
+
+/**
+ * Calculate the exact geographic bounds that Google Maps will return
+ * for a given center, zoom, and image size
+ */
+function calculateGoogleMapsBounds(
+  centerLat: number,
+  centerLng: number,
+  zoom: number,
+  width: number,
+  height: number
+): { minLat: number; maxLat: number; minLng: number; maxLng: number } {
+  const WORLD_DIM = 256;
+  const scale = Math.pow(2, zoom);
+  
+  // Convert center to pixel coordinates
+  const centerX = ((centerLng + 180) / 360) * WORLD_DIM * scale;
+  const latRad = centerLat * Math.PI / 180;
+  const centerY = (1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * WORLD_DIM * scale;
+  
+  // Calculate corner pixels
+  const minX = centerX - width / 2;
+  const maxX = centerX + width / 2;
+  const minY = centerY - height / 2;
+  const maxY = centerY + height / 2;
+  
+  // Convert back to lat/lng
+  const minLng = (minX / (WORLD_DIM * scale)) * 360 - 180;
+  const maxLng = (maxX / (WORLD_DIM * scale)) * 360 - 180;
+  
+  const n1 = Math.PI - 2 * Math.PI * minY / (WORLD_DIM * scale);
+  const maxLat = 180 / Math.PI * Math.atan(0.5 * (Math.exp(n1) - Math.exp(-n1)));
+  
+  const n2 = Math.PI - 2 * Math.PI * maxY / (WORLD_DIM * scale);
+  const minLat = 180 / Math.PI * Math.atan(0.5 * (Math.exp(n2) - Math.exp(-n2)));
+  
+  return { minLat, maxLat, minLng, maxLng };
+}
+
+/**
+ * Fetch Google Maps Static API satellite image with exact bounds calculation
+ * Returns both the image buffer and the exact geographic bounds
+ */
+export async function fetchGoogleMapsSatelliteWithBounds(
+  coordinates: { lat: number; lng: number }[],
+  targetSize: number = 1200
+): Promise<{ buffer: Buffer; bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number }; width: number; height: number }> {
   // Try server-side key first (unrestricted), fall back to client-side key
   let apiKey = process.env.GOOGLE_MAPS_SERVER_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   
   if (!apiKey) {
-    throw new Error('Google Maps API key is not configured (need GOOGLE_MAPS_SERVER_API_KEY or NEXT_PUBLIC_GOOGLE_MAPS_API_KEY)');
+    throw new Error('Google Maps API key is not configured');
   }
-  
-  // Trim whitespace and validate key
   apiKey = apiKey.trim();
   
-  if (apiKey.length < 30) {
-    console.error(`[Composite] API key appears truncated or invalid. Length: ${apiKey.length}, Key: ${apiKey}`);
-    throw new Error(`Google Maps API key appears invalid (too short: ${apiKey.length} characters)`);
-  }
-  
-  console.log(`[Composite] Using API key: ${apiKey.substring(0, 10)}... (length: ${apiKey.length})`);
+  console.log(`[GoogleMaps] Using API key: ${apiKey.substring(0, 10)}... (length: ${apiKey.length})`);
 
-  // Calculate width and height based on bounding box aspect ratio
-  // This matches how Earth Engine calculates dimensions with 'dimensions: 1200'
-  const latRange = bounds.maxLat - bounds.minLat;
-  const lngRange = bounds.maxLng - bounds.minLng;
+  // Calculate initial bounds from polygon with padding
+  const initialBounds = calculateBoundingBox(coordinates, 5);
   
-  // Account for latitude distortion (at equator, 1 degree lng = 1 degree lat in meters)
-  // As we move away from equator, longitude degrees become smaller
-  const avgLat = (bounds.maxLat + bounds.minLat) / 2;
-  const latDistortion = Math.cos(avgLat * Math.PI / 180);
-  const adjustedLngRange = lngRange * latDistortion;
+  // Calculate center
+  const centerLat = (initialBounds.minLat + initialBounds.maxLat) / 2;
+  const centerLng = (initialBounds.minLng + initialBounds.maxLng) / 2;
   
-  // Determine which dimension should be the max
-  let width: number, height: number;
-  if (adjustedLngRange > latRange) {
-    // Wider than tall
-    width = maxDimension;
-    height = Math.round(maxDimension * (latRange / adjustedLngRange));
-  } else {
-    // Taller than wide
-    height = maxDimension;
-    width = Math.round(maxDimension * (adjustedLngRange / latRange));
-  }
-  
-  // Google Maps Static API max size is 640x640 (or 1280x1280 with scale=2)
-  // We'll use scale=2 to get up to 1280x1280
-  const maxGoogleSize = 640; // Will be doubled with scale=2
+  // Google Maps max size is 640x640 with scale=2 = 1280x1280
+  const maxGoogleSize = 640;
   const scale = 2;
   
-  // Cap dimensions proportionally to Google's limits
-  const maxDim = Math.max(width, height);
-  if (maxDim > maxGoogleSize) {
-    const ratio = maxGoogleSize / maxDim;
-    width = Math.round(width * ratio);
-    height = Math.round(height * ratio);
+  // Calculate aspect ratio from bounds
+  const latRange = initialBounds.maxLat - initialBounds.minLat;
+  const lngRange = initialBounds.maxLng - initialBounds.minLng;
+  const avgLat = centerLat;
+  const latDistortion = Math.cos(avgLat * Math.PI / 180);
+  const aspectRatio = (lngRange * latDistortion) / latRange; // width/height in real world
+  
+  // Calculate dimensions maintaining aspect ratio
+  let width: number, height: number;
+  if (aspectRatio > 1) {
+    // Wider than tall
+    width = Math.min(maxGoogleSize, Math.round(targetSize / scale));
+    height = Math.round(width / aspectRatio);
+  } else {
+    // Taller than wide
+    height = Math.min(maxGoogleSize, Math.round(targetSize / scale));
+    width = Math.round(height * aspectRatio);
   }
   
-  // Ensure minimum dimensions
-  width = Math.max(100, width);
-  height = Math.max(100, height);
+  // Ensure within limits
+  width = Math.max(100, Math.min(maxGoogleSize, width));
+  height = Math.max(100, Math.min(maxGoogleSize, height));
   
-  console.log(`[Composite] Calculated dimensions: ${width}x${height} (scale ${scale} = ${width*scale}x${height*scale})`);
+  // Calculate zoom level
+  const zoom = calculateZoomLevel(initialBounds, width * scale, height * scale);
+  
+  // Calculate the EXACT bounds Google Maps will return
+  const exactBounds = calculateGoogleMapsBounds(centerLat, centerLng, zoom, width * scale, height * scale);
+  
+  console.log(`[GoogleMaps] Center: ${centerLat.toFixed(6)}, ${centerLng.toFixed(6)}`);
+  console.log(`[GoogleMaps] Zoom: ${zoom}, Size: ${width}x${height} (scale ${scale} = ${width*scale}x${height*scale})`);
+  console.log(`[GoogleMaps] Exact bounds: [${exactBounds.minLng.toFixed(6)}, ${exactBounds.minLat.toFixed(6)}, ${exactBounds.maxLng.toFixed(6)}, ${exactBounds.maxLat.toFixed(6)}]`);
 
-  // Use 'visible' parameter to force Google Maps to show the exact bounding box
+  // Fetch from Google Maps using center and zoom (not visible)
   const url = new URL('https://maps.googleapis.com/maps/api/staticmap');
-  
-  // Set visible parameter with all four corners of the bounding box
-  const visiblePath = `${bounds.minLat},${bounds.minLng}|${bounds.maxLat},${bounds.maxLng}`;
-  url.searchParams.set('visible', visiblePath);
-  
+  url.searchParams.set('center', `${centerLat},${centerLng}`);
+  url.searchParams.set('zoom', zoom.toString());
   url.searchParams.set('size', `${width}x${height}`);
   url.searchParams.set('scale', scale.toString());
   url.searchParams.set('maptype', 'satellite');
   url.searchParams.set('key', apiKey);
 
-  console.log(`[Composite] Fetching Google Maps for exact bounds: [${bounds.minLng}, ${bounds.minLat}, ${bounds.maxLng}, ${bounds.maxLat}]`);
-  console.log(`[Composite] Google Maps URL: ${url.toString().substring(0, 150)}...`);
+  console.log(`[GoogleMaps] URL: ${url.toString().substring(0, 150)}...`);
 
-  try {
-    const response = await fetch(url.toString());
-    
-    if (!response.ok) {
-      // Get the actual error response from Google Maps API
-      const errorText = await response.text();
-      console.error('[Composite] Google Maps API error response:', {
-        status: response.status,
-        statusText: response.statusText,
-        body: errorText,
-        url: url.toString().replace(apiKey, 'API_KEY_HIDDEN')
-      });
-      
-      // Parse common Google Maps API errors
-      if (response.status === 403) {
-        if (errorText.includes('billing')) {
-          throw new Error(`Google Maps API billing not enabled. Please enable billing in Google Cloud Console.`);
-        } else if (errorText.includes('REQUEST_DENIED')) {
-          throw new Error(`Google Maps API request denied. Error: ${errorText}`);
-        } else {
-          throw new Error(`Google Maps API 403 Forbidden. Response: ${errorText.substring(0, 200)}`);
-        }
-      }
-      
-      throw new Error(`Google Maps API error: ${response.status} ${response.statusText} - ${errorText.substring(0, 200)}`);
-    }
-
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    
-    console.log(`[Composite] ✅ Google Maps satellite image fetched (${buffer.length} bytes)`);
-    return buffer;
-  } catch (error: any) {
-    console.error('[Composite] Failed to fetch Google Maps satellite image:', error.message);
-    throw new Error(`Failed to fetch satellite base image: ${error.message}`);
+  const response = await fetch(url.toString());
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Google Maps API error: ${response.status} - ${errorText.substring(0, 200)}`);
   }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  
+  console.log(`[GoogleMaps] ✅ Satellite image fetched (${buffer.length} bytes)`);
+  
+  return {
+    buffer,
+    bounds: exactBounds,
+    width: width * scale,
+    height: height * scale,
+  };
 }
 
 /**
