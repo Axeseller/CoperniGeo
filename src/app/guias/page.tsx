@@ -152,7 +152,7 @@ export default function GuiasPage() {
                 <h2 className="text-xl font-bold text-[#242424] mb-3">{guide.title}</h2>
                 <p className="text-[#898989] mb-4">{guide.description}</p>
                 <Link
-                  href="#"
+                  href={`/guias/${guide.title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}`}
                   className="text-[#5db815] hover:text-[#4a9a11] font-medium inline-flex items-center gap-2"
                 >
                   Leer guía
