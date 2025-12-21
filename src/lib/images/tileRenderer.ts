@@ -20,7 +20,19 @@ async function getBrowser(): Promise<any> {
     console.log('[TileRenderer] Using @sparticuz/chromium-min for Vercel');
     
     try {
-      // @sparticuz/chromium-min handles extraction automatically
+      // Force chromium-min to extract to /tmp (Vercel allows /tmp)
+      // This prevents it from trying to extract to non-existent relative paths
+      if (!process.env.CHROMIUM_PATH) {
+        process.env.CHROMIUM_PATH = '/tmp';
+      }
+      if (!process.env.TMPDIR) {
+        process.env.TMPDIR = '/tmp';
+      }
+      if (!process.env.TMP) {
+        process.env.TMP = '/tmp';
+      }
+      
+      // @sparticuz/chromium-min will extract to /tmp automatically
       const executablePath = await chromium.executablePath();
       console.log(`[TileRenderer] Chromium executable path: ${executablePath}`);
       
