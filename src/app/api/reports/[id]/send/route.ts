@@ -749,10 +749,12 @@ async function generateReportEmail(
               [gmaps.bounds.minLng, gmaps.bounds.minLat],
             ]]);
             
-            // Get fresh Sentinel-2 data and calculate index
-            const collection = getSentinel2Collection(100); // 100% to not filter
+            // Get Sentinel-2 data filtered by the exact region
+            const collection = getSentinel2Collection(100)
+              .filterBounds(exactRegion); // IMPORTANT: filter by bounds!
             const recentImage = getMostRecentImage(collection);
-            const indexImg = calculateIndex(recentImage, data.indexType as any);
+            const indexImg = calculateIndex(recentImage, data.indexType as any)
+              .clip(exactRegion); // Clip to exact bounds
             
             // Generate thumbnail for EXACT Google Maps bounds with EXACT dimensions
             const alignedOverlayUrl = await new Promise<string>((resolve, reject) => {
@@ -784,12 +786,14 @@ async function generateReportEmail(
             console.log(`[Email] ✅ Aligned overlay downloaded (${alignedOverlayBuffer.length} bytes)`);
             
             // Step 3: Composite them together (overlay is now perfectly aligned!)
+            // Pass Google Maps bounds so mask is positioned correctly!
             finalImageBuffer = await compositeIndexOverlay(
               gmaps.buffer,
               alignedOverlayBuffer,
               data.coordinates,
               0.7,
-              '#5db815'
+              '#5db815',
+              gmaps.bounds // Use Google Maps bounds for correct mask positioning
             );
             console.log(`[Email] ✅ High-quality Google Maps composite generated (${finalImageBuffer.length} bytes)`);
           } catch (gmapsError: any) {

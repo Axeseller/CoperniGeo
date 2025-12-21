@@ -287,7 +287,8 @@ export async function compositeIndexOverlay(
   overlayImageBuffer: Buffer,
   coordinates: { lat: number; lng: number }[],
   opacity: number = 0.7,
-  polygonColor: string = '#5db815'
+  polygonColor: string = '#5db815',
+  customBounds?: { minLat: number; maxLat: number; minLng: number; maxLng: number }
 ): Promise<Buffer> {
   try {
     console.log(`[Composite] Starting Earth Engine image composition...`);
@@ -312,9 +313,9 @@ export async function compositeIndexOverlay(
 
     console.log(`[Composite] Overlay resized to match base image`);
 
-    // Calculate bounding box with 5% padding - SAME as Earth Engine generation
-    // This is critical for alignment!
-    const bounds = calculateBoundingBox(coordinates, 5);
+    // Use custom bounds if provided (e.g., from Google Maps), otherwise calculate with 5% padding
+    const bounds = customBounds || calculateBoundingBox(coordinates, 5);
+    console.log(`[Composite] Using bounds: [${bounds.minLng.toFixed(6)}, ${bounds.minLat.toFixed(6)}, ${bounds.maxLng.toFixed(6)}, ${bounds.maxLat.toFixed(6)}]`);
 
     // Generate polygon outline
     const polygonSVG = generatePolygonSVG(
