@@ -1,14 +1,14 @@
 import puppeteerCore from 'puppeteer-core';
-import type { Browser } from 'puppeteer-core';
 
-let browserInstance: Browser | null = null;
+// Use any for browser type to avoid version mismatches between puppeteer-core and puppeteer
+let browserInstance: any = null;
 
 /**
  * Get or create a shared browser instance
  * Reusing the browser significantly improves performance
  * Uses @sparticuz/chromium for serverless environments (Vercel)
  */
-async function getBrowser(): Promise<Browser> {
+async function getBrowser(): Promise<any> {
   if (browserInstance && browserInstance.connected) {
     return browserInstance;
   }
@@ -141,32 +141,164 @@ function generateMapHTML(
     // Fit to padded bounds
     map.fitBounds(paddedBounds);
     
-    // Add Earth Engine tile overlay (SAME as dashboard!)
-    const overlay = new google.maps.ImageMapType({
-      getTileUrl: function(coord, zoom) {
-        if (coord.x < 0 || coord.y < 0) return null;
-        const maxCoord = Math.pow(2, zoom);
-        if (coord.x >= maxCoord || coord.y >= maxCoord) return null;
+    // Custom overlay that clips Earth Engine tiles to the polygon
+    class ClippedTileOverlay extends google.maps.OverlayView {
+      constructor(tileUrl, polygon, opacity) {
+        super();
+        this.tileUrl = tileUrl;
+        this.polygon = polygon;
+        this.opacity = opacity;
+        this.tiles = new Map();
+        this.canvas = null;
+      }
+      
+      onAdd() {
+        this.canvas = document.createElement('canvas');
+        this.canvas.style.position = 'absolute';
+        this.canvas.style.pointerEvents = 'none';
+        const panes = this.getPanes();
+        panes.overlayLayer.appendChild(this.canvas);
+      }
+      
+      draw() {
+        const projection = this.getProjection();
+        if (!projection) return;
         
-        let url = '${tileUrl}';
-        if (url.includes('{x}') || url.includes('{y}') || url.includes('{z}')) {
-          url = url
-            .replace(/{x}/g, coord.x.toString())
-            .replace(/{y}/g, coord.y.toString())
-            .replace(/{z}/g, zoom.toString());
-        } else {
-          url = url + '&x=' + coord.x + '&y=' + coord.y + '&z=' + zoom;
+        const mapDiv = this.getMap().getDiv();
+        const width = mapDiv.offsetWidth;
+        const height = mapDiv.offsetHeight;
+        
+        this.canvas.width = width;
+        this.canvas.height = height;
+        this.canvas.style.left = '0px';
+        this.canvas.style.top = '0px';
+        this.canvas.style.width = width + 'px';
+        this.canvas.style.height = height + 'px';
+        
+        const ctx = this.canvas.getContext('2d');
+        ctx.clearRect(0, 0, width, height);
+        
+        // Convert polygon coordinates to pixel coordinates
+        const pixelCoords = this.polygon.map(coord => {
+          const latLng = new google.maps.LatLng(coord.lat, coord.lng);
+          const pixel = projection.fromLatLngToDivPixel(latLng);
+          return pixel;
+        });
+        
+        // Create clipping path from polygon
+        ctx.save();
+        ctx.beginPath();
+        pixelCoords.forEach((pixel, i) => {
+          if (i === 0) {
+            ctx.moveTo(pixel.x, pixel.y);
+          } else {
+            ctx.lineTo(pixel.x, pixel.y);
+          }
+        });
+        ctx.closePath();
+        ctx.clip();
+        
+        // Draw loaded tiles within the clipping region
+        const zoom = this.getMap().getZoom();
+        const tileSize = 256;
+        
+        // Calculate which tiles we need
+        const mapBounds = this.getMap().getBounds();
+        if (!mapBounds) return;
+        
+        const neTile = this.latLngToTile(mapBounds.getNorthEast(), zoom);
+        const swTile = this.latLngToTile(mapBounds.getSouthWest(), zoom);
+        
+        // Load and draw tiles
+        for (let x = swTile.x; x <= neTile.x; x++) {
+          for (let y = neTile.y; y <= swTile.y; y++) {
+            const tileKey = zoom + '/' + x + '/' + y;
+            let img = this.tiles.get(tileKey);
+            
+            if (!img) {
+              img = new Image();
+              img.crossOrigin = 'anonymous';
+              let url = this.tileUrl;
+              if (url.includes('{x}') || url.includes('{y}') || url.includes('{z}')) {
+                url = url
+                  .replace(/{x}/g, x.toString())
+                  .replace(/{y}/g, y.toString())
+                  .replace(/{z}/g, zoom.toString());
+              }
+              img.src = url;
+              img.onload = () => this.draw();
+              this.tiles.set(tileKey, img);
+            }
+            
+            if (img.complete && img.naturalWidth > 0) {
+              // Calculate tile position in pixels
+              const tileLatLng = this.tileToLatLng(x, y, zoom);
+              const tilePixel = projection.fromLatLngToDivPixel(tileLatLng);
+              
+              const nextTileLatLng = this.tileToLatLng(x + 1, y + 1, zoom);
+              const nextTilePixel = projection.fromLatLngToDivPixel(nextTileLatLng);
+              
+              const tileWidth = nextTilePixel.x - tilePixel.x;
+              const tileHeight = nextTilePixel.y - tilePixel.y;
+              
+              ctx.globalAlpha = this.opacity;
+              ctx.drawImage(img, tilePixel.x, tilePixel.y, tileWidth, tileHeight);
+            }
+          }
         }
-        return url;
-      },
-      tileSize: new google.maps.Size(256, 256),
-      opacity: ${indexOpacity},
-      name: 'Earth Engine Overlay',
-    });
+        
+        ctx.restore();
+        
+        // Draw polygon outline on top
+        ctx.strokeStyle = '${polygonColor}';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        pixelCoords.forEach((pixel, i) => {
+          if (i === 0) {
+            ctx.moveTo(pixel.x, pixel.y);
+          } else {
+            ctx.lineTo(pixel.x, pixel.y);
+          }
+        });
+        ctx.closePath();
+        ctx.stroke();
+      }
+      
+      latLngToTile(latLng, zoom) {
+        const lat = latLng.lat();
+        const lng = latLng.lng();
+        const x = Math.floor((lng + 180) / 360 * Math.pow(2, zoom));
+        const y = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom));
+        return { x, y };
+      }
+      
+      tileToLatLng(x, y, zoom) {
+        const n = Math.PI - 2 * Math.PI * y / Math.pow(2, zoom);
+        const lat = 180 / Math.PI * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+        const lng = x / Math.pow(2, zoom) * 360 - 180;
+        return new google.maps.LatLng(lat, lng);
+      }
+      
+      onRemove() {
+        if (this.canvas && this.canvas.parentNode) {
+          this.canvas.parentNode.removeChild(this.canvas);
+        }
+      }
+    }
     
-    map.overlayMapTypes.push(overlay);
+    // Create and add the clipped overlay
+    const clippedOverlay = new ClippedTileOverlay(
+      '${tileUrl}',
+      coordinates,
+      ${indexOpacity}
+    );
+    clippedOverlay.setMap(map);
     
-    // Draw polygon outline
+    // Redraw on map changes
+    map.addListener('bounds_changed', () => clippedOverlay.draw());
+    map.addListener('zoom_changed', () => clippedOverlay.draw());
+    
+    // Draw polygon outline (backup, in case overlay doesn't draw it)
     const polygon = new google.maps.Polygon({
       paths: coordinates,
       strokeColor: '${polygonColor}',

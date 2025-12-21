@@ -37,10 +37,13 @@ export function calculateBoundingBox(
 
 /**
  * Fetch Google Maps Static API satellite image for bounding box
+ * Calculates proper dimensions to match Earth Engine's aspect ratio
+ * @param bounds - The bounding box to fetch
+ * @param maxDimension - The maximum dimension (like Earth Engine's dimensions: 1200)
  */
 export async function fetchGoogleMapsSatelliteImage(
   bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number },
-  size: number = 1200
+  maxDimension: number = 1200
 ): Promise<Buffer> {
   // Try server-side key first (unrestricted), fall back to client-side key
   let apiKey = process.env.GOOGLE_MAPS_SERVER_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
@@ -59,19 +62,59 @@ export async function fetchGoogleMapsSatelliteImage(
   
   console.log(`[Composite] Using API key: ${apiKey.substring(0, 10)}... (length: ${apiKey.length})`);
 
+  // Calculate width and height based on bounding box aspect ratio
+  // This matches how Earth Engine calculates dimensions with 'dimensions: 1200'
+  const latRange = bounds.maxLat - bounds.minLat;
+  const lngRange = bounds.maxLng - bounds.minLng;
+  
+  // Account for latitude distortion (at equator, 1 degree lng = 1 degree lat in meters)
+  // As we move away from equator, longitude degrees become smaller
+  const avgLat = (bounds.maxLat + bounds.minLat) / 2;
+  const latDistortion = Math.cos(avgLat * Math.PI / 180);
+  const adjustedLngRange = lngRange * latDistortion;
+  
+  // Determine which dimension should be the max
+  let width: number, height: number;
+  if (adjustedLngRange > latRange) {
+    // Wider than tall
+    width = maxDimension;
+    height = Math.round(maxDimension * (latRange / adjustedLngRange));
+  } else {
+    // Taller than wide
+    height = maxDimension;
+    width = Math.round(maxDimension * (adjustedLngRange / latRange));
+  }
+  
+  // Google Maps Static API max size is 640x640 (or 1280x1280 with scale=2)
+  // We'll use scale=2 to get up to 1280x1280
+  const maxGoogleSize = 640; // Will be doubled with scale=2
+  const scale = 2;
+  
+  // Cap dimensions proportionally to Google's limits
+  const maxDim = Math.max(width, height);
+  if (maxDim > maxGoogleSize) {
+    const ratio = maxGoogleSize / maxDim;
+    width = Math.round(width * ratio);
+    height = Math.round(height * ratio);
+  }
+  
+  // Ensure minimum dimensions
+  width = Math.max(100, width);
+  height = Math.max(100, height);
+  
+  console.log(`[Composite] Calculated dimensions: ${width}x${height} (scale ${scale} = ${width*scale}x${height*scale})`);
+
   // Use 'visible' parameter to force Google Maps to show the exact bounding box
-  // This ensures the returned image covers exactly the same area as the Earth Engine thumbnail
   const url = new URL('https://maps.googleapis.com/maps/api/staticmap');
   
   // Set visible parameter with all four corners of the bounding box
-  // This forces Google Maps to fit exactly this area
   const visiblePath = `${bounds.minLat},${bounds.minLng}|${bounds.maxLat},${bounds.maxLng}`;
   url.searchParams.set('visible', visiblePath);
   
-  url.searchParams.set('size', `${size}x${size}`);
+  url.searchParams.set('size', `${width}x${height}`);
+  url.searchParams.set('scale', scale.toString());
   url.searchParams.set('maptype', 'satellite');
   url.searchParams.set('key', apiKey);
-  url.searchParams.set('scale', '1'); // Use scale 1 to match Earth Engine dimensions exactly
 
   console.log(`[Composite] Fetching Google Maps for exact bounds: [${bounds.minLng}, ${bounds.minLat}, ${bounds.maxLng}, ${bounds.maxLat}]`);
   console.log(`[Composite] Google Maps URL: ${url.toString().substring(0, 150)}...`);
@@ -136,28 +179,35 @@ function latLngToPixel(
 }
 
 /**
- * Generate SVG polygon mask (filled, for masking the overlay to only show inside AOI)
+ * Generate polygon mask as raw pixels for reliable masking
+ * Returns a PNG where white (255) = inside polygon, black (0) = outside
  */
-function generatePolygonMask(
+async function generatePolygonMaskBuffer(
   coordinates: { lat: number; lng: number }[],
   bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number },
   imageWidth: number,
   imageHeight: number
-): string {
+): Promise<Buffer> {
   const points = coordinates.map((coord) => {
     const pixel = latLngToPixel(coord.lat, coord.lng, bounds, imageWidth, imageHeight);
     return `${pixel.x},${pixel.y}`;
   }).join(' ');
 
-  // Create a white filled polygon on black background (mask)
+  // Create SVG mask with explicit BLACK background and WHITE polygon
+  // This ensures clear 0/255 values when we extract the red channel
   const svg = `
     <svg width="${imageWidth}" height="${imageHeight}" xmlns="http://www.w3.org/2000/svg">
-      <rect width="${imageWidth}" height="${imageHeight}" fill="black"/>
+      <rect x="0" y="0" width="${imageWidth}" height="${imageHeight}" fill="black"/>
       <polygon points="${points}" fill="white"/>
     </svg>
   `;
 
-  return svg;
+  // Render SVG to PNG
+  const maskPng = await sharp(Buffer.from(svg))
+    .png()
+    .toBuffer();
+  
+  return maskPng;
 }
 
 /**
@@ -227,16 +277,6 @@ export async function compositeIndexOverlay(
     // This is critical for alignment!
     const bounds = calculateBoundingBox(coordinates, 5);
 
-    // Generate polygon mask to only show overlay inside AOI
-    const polygonMaskSVG = generatePolygonMask(
-      coordinates,
-      bounds,
-      imageWidth,
-      imageHeight
-    );
-    
-    console.log(`[Composite] Generated polygon mask`);
-    
     // Generate polygon outline
     const polygonSVG = generatePolygonSVG(
       coordinates,
@@ -275,17 +315,60 @@ export async function compositeIndexOverlay(
 
     console.log(`[Composite] Applied ${opacity} opacity to overlay`);
     
-    // Convert polygon mask SVG to buffer
-    const maskBuffer = Buffer.from(polygonMaskSVG);
+    // Generate polygon mask - extract the alpha channel we'll use for masking
+    const maskPngBuffer = await generatePolygonMaskBuffer(
+      coordinates,
+      bounds,
+      imageWidth,
+      imageHeight
+    );
     
-    // Apply mask to overlay so it only shows inside the polygon
-    const maskedOverlay = await sharp(overlayWithOpacity)
-      .composite([{
-        input: maskBuffer,
-        blend: 'dest-in', // Only keep overlay pixels where mask is white
-      }])
-      .png()
+    // Extract the red channel from mask PNG as grayscale (white polygon = 255, black bg = 0)
+    const maskData = await sharp(maskPngBuffer)
+      .extractChannel('red')
+      .raw()
       .toBuffer();
+    
+    // Debug: count white vs black pixels in mask
+    let whitePixels = 0;
+    let blackPixels = 0;
+    for (let i = 0; i < maskData.length; i++) {
+      if (maskData[i] > 128) whitePixels++;
+      else blackPixels++;
+    }
+    console.log(`[Composite] Mask data: ${maskData.length} pixels, ${whitePixels} inside polygon, ${blackPixels} outside`);
+    
+    // Get the overlay with opacity as RGBA raw data
+    const overlayData = await sharp(overlayWithOpacity)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    
+    // Apply mask: multiply each pixel's alpha by the mask value
+    const maskedData = Buffer.alloc(overlayData.data.length);
+    for (let i = 0; i < overlayData.data.length; i += 4) {
+      const pixelIndex = i / 4;
+      const maskValue = maskData[pixelIndex] || 0;
+      
+      // Copy RGB channels
+      maskedData[i] = overlayData.data[i];     // R
+      maskedData[i + 1] = overlayData.data[i + 1]; // G
+      maskedData[i + 2] = overlayData.data[i + 2]; // B
+      
+      // Multiply alpha by mask (mask is 0-255, alpha is 0-255)
+      // If mask is 255 (white/inside polygon), keep full alpha
+      // If mask is 0 (black/outside polygon), set alpha to 0
+      maskedData[i + 3] = Math.round((overlayData.data[i + 3] * maskValue) / 255);
+    }
+    
+    // Convert back to PNG
+    const maskedOverlay = await sharp(maskedData, {
+      raw: {
+        width: overlayData.info.width,
+        height: overlayData.info.height,
+        channels: 4,
+      },
+    }).png().toBuffer();
     
     console.log(`[Composite] Applied polygon mask to overlay (only shows inside AOI)`);
 
