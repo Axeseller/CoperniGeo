@@ -15,6 +15,7 @@ export default function ContactoPage() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState("");
+  const [isError, setIsError] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -40,16 +41,38 @@ export default function ContactoPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setSubmitMessage("");
+    setIsError(false);
     
-    // Simulate form submission
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    setSubmitMessage("¡Gracias por tu mensaje! Te contactaremos pronto.");
-    setFormData({ name: "", email: "", company: "", message: "" });
-    setIsSubmitting(false);
-    
-    // Clear message after 5 seconds
-    setTimeout(() => setSubmitMessage(""), 5000);
+    try {
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Error al enviar el mensaje');
+      }
+
+      setSubmitMessage("¡Gracias por tu mensaje! Te contactaremos pronto.");
+      setIsError(false);
+      setFormData({ name: "", email: "", company: "", message: "" });
+    } catch (error: any) {
+      setSubmitMessage(error.message || "Error al enviar el mensaje. Por favor intenta de nuevo.");
+      setIsError(true);
+    } finally {
+      setIsSubmitting(false);
+      // Clear message after 5 seconds
+      setTimeout(() => {
+        setSubmitMessage("");
+        setIsError(false);
+      }, 5000);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -272,7 +295,11 @@ export default function ContactoPage() {
               </h2>
               
               {submitMessage && (
-                <div className="mb-6 bg-[#5db815]/10 border border-[#5db815] text-[#5db815] px-4 py-3 rounded-md">
+                <div className={`mb-6 px-4 py-3 rounded-md ${
+                  isError 
+                    ? 'bg-red-50 border border-red-200 text-red-700' 
+                    : 'bg-[#5db815]/10 border border-[#5db815] text-[#5db815]'
+                }`}>
                   {submitMessage}
                 </div>
               )}
@@ -289,7 +316,7 @@ export default function ContactoPage() {
                     required
                     value={formData.name}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#5db815] focus:border-transparent outline-none transition-all"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#5db815] focus:border-transparent outline-none transition-all text-[#121212] placeholder:text-gray-500"
                     placeholder="Tu nombre"
                   />
                 </div>
@@ -305,7 +332,7 @@ export default function ContactoPage() {
                     required
                     value={formData.email}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#5db815] focus:border-transparent outline-none transition-all"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#5db815] focus:border-transparent outline-none transition-all text-[#121212] placeholder:text-gray-500"
                     placeholder="tu@email.com"
                   />
                 </div>
@@ -320,7 +347,7 @@ export default function ContactoPage() {
                     name="company"
                     value={formData.company}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#5db815] focus:border-transparent outline-none transition-all"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#5db815] focus:border-transparent outline-none transition-all text-[#121212] placeholder:text-gray-500"
                     placeholder="Nombre de tu empresa"
                   />
                 </div>
@@ -336,7 +363,7 @@ export default function ContactoPage() {
                     value={formData.message}
                     onChange={handleChange}
                     rows={6}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#5db815] focus:border-transparent outline-none transition-all resize-none"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#5db815] focus:border-transparent outline-none transition-all resize-none text-[#121212] placeholder:text-gray-500"
                     placeholder="Cuéntanos cómo podemos ayudarte..."
                   />
                 </div>
