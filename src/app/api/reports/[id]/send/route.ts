@@ -9,14 +9,14 @@ import { IndexType } from "@/types/report";
 import { getFrequencyLabel } from "@/lib/utils/reports";
 import { calculatePolygonArea, squareMetersToKm } from "@/lib/utils/geometry";
 import { uploadImageWithDedup, uploadPDFAdmin } from "@/lib/storage/admin-upload";
-import { compositeIndexOverlay, fetchGoogleMapsSatelliteSimple, calculateBoundingBox } from '@/lib/images/compositeImage';
+import { compositeIndexOverlay } from '@/lib/images/compositeImage';
 import { renderMapWithTiles } from '@/lib/images/tileRenderer';
 import sharp from 'sharp';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120; // Allow up to 120 seconds for processing (reports may take longer)
 
-// v3.5 - Google Maps (visible param) + Earth Engine overlay with SAME bounds = perfect alignment
+// v3.8 - Headless browser with Google Maps + Earth Engine tiles (fix tile loading)
 
 /**
  * POST /api/reports/[id]/send
@@ -699,19 +699,18 @@ async function generateReportEmail(
       }
     }
     
-    // Use tile-based rendering (mimics dashboard exactly!)
-    // This renders Google Maps + Earth Engine tiles + polygon, then captures as image
+    // Use headless browser to render Google Maps + Earth Engine tiles
+    // This ensures perfect alignment since both are rendered on the same map
     let finalImageBuffer: Buffer | null = null;
     
     if (data.coordinates && data.coordinates.length >= 3 && data.imageUrl) {
       try {
-        console.log(`[Email] Rendering map with tiles (dashboard approach) for ${data.areaName}...`);
-        console.log(`[Email] Using tile URL: ${data.imageUrl.substring(0, 100)}...`);
+        console.log(`[Email] Rendering map with headless browser (Google Maps + EE tiles)...`);
+        console.log(`[Email] Tile URL: ${data.imageUrl.substring(0, 100)}...`);
         
-        // Render map with tiles - SAME as dashboard!
         finalImageBuffer = await renderMapWithTiles(
           data.coordinates,
-          data.imageUrl, // Earth Engine tile URL
+          data.imageUrl,
           {
             width: 1200,
             height: 1200,
@@ -720,53 +719,26 @@ async function generateReportEmail(
           }
         );
         
-        console.log(`[Email] ✅ Tile-based image rendered (${finalImageBuffer.length} bytes)`);
+        console.log(`[Email] ✅ Headless browser screenshot captured (${finalImageBuffer.length} bytes)`);
         contentType = 'image/png';
       } catch (renderError: any) {
-        // Chrome/Puppeteer not available in Vercel - this is expected
-        console.error(`[Email] Failed to render map with tiles: ${renderError.message}`);
-        console.log(`[Email] Falling back to Google Maps + Earth Engine composite...`);
+        console.error(`[Email] Headless browser rendering failed: ${renderError.message}`);
         
-        // Fallback: Google Maps background + Earth Engine overlay
-        // KEY: Both use SAME bounds (5% padding) for perfect alignment!
-        if (overlayBuffer && data.coordinates && data.coordinates.length >= 3) {
+        // Fallback to Earth Engine composite
+        if (baseBuffer && overlayBuffer) {
           try {
-            // Calculate bounds with 5% padding - SAME as Earth Engine uses
-            const bounds = calculateBoundingBox(data.coordinates, 5);
-            console.log(`[Email] Using bounds (5% padding): [${bounds.minLng.toFixed(6)}, ${bounds.minLat.toFixed(6)}, ${bounds.maxLng.toFixed(6)}, ${bounds.maxLat.toFixed(6)}]`);
-            
-            // Fetch Google Maps with 'visible' parameter for EXACT bounds
-            const googleMapsBuffer = await fetchGoogleMapsSatelliteSimple(bounds, 640);
-            console.log(`[Email] ✅ Google Maps fetched (${googleMapsBuffer.length} bytes)`);
-            
-            // Composite: Google Maps (high quality) + Earth Engine overlay (same bounds)
+            console.log(`[Email] Falling back to Earth Engine composite...`);
             finalImageBuffer = await compositeIndexOverlay(
-              googleMapsBuffer,
-              overlayBuffer, // Already generated with same 5% padding bounds
+              baseBuffer,
+              overlayBuffer,
               data.coordinates,
               0.7,
               '#5db815'
             );
-            console.log(`[Email] ✅ Google Maps + EE composite generated (${finalImageBuffer.length} bytes)`);
-          } catch (gmapsError: any) {
-            console.error(`[Email] Google Maps composite failed: ${gmapsError.message}`);
-            
-            // Final fallback: Earth Engine only
-            if (baseBuffer && overlayBuffer) {
-              try {
-                console.log(`[Email] Final fallback: Earth Engine-only composite...`);
-                finalImageBuffer = await compositeIndexOverlay(
-                  baseBuffer,
-                  overlayBuffer,
-                  data.coordinates,
-                  0.7,
-                  '#5db815'
-                );
-                console.log(`[Email] ✅ Earth Engine fallback composite generated (${finalImageBuffer.length} bytes)`);
-              } catch (eeError: any) {
-                console.error(`[Email] Earth Engine composite also failed: ${eeError.message}`);
-              }
-            }
+            console.log(`[Email] ✅ Earth Engine composite generated (${finalImageBuffer.length} bytes)`);
+            contentType = 'image/png';
+          } catch (compositeError: any) {
+            console.error(`[Email] Composite also failed: ${compositeError.message}`);
           }
         }
       }

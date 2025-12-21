@@ -36,13 +36,13 @@ export function calculateBoundingBox(
 }
 
 /**
- * Fetch Google Maps satellite image using 'visible' parameter for EXACT bounds matching
- * This ensures the image covers exactly the same area as Earth Engine thumbnails
+ * Fetch Google Maps satellite image with dimensions matching Earth Engine thumbnail
+ * Returns buffer AND actual dimensions for proper compositing
  */
 export async function fetchGoogleMapsSatelliteSimple(
   bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number },
-  size: number = 640 // Max is 640, use scale=2 for 1280
-): Promise<Buffer> {
+  targetDimension: number = 1200 // Target dimension to match Earth Engine
+): Promise<{ buffer: Buffer; width: number; height: number }> {
   let apiKey = process.env.GOOGLE_MAPS_SERVER_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   
   if (!apiKey) {
@@ -51,17 +51,68 @@ export async function fetchGoogleMapsSatelliteSimple(
   apiKey = apiKey.trim();
   
   console.log(`[GoogleMaps] Using API key: ${apiKey.substring(0, 10)}... (length: ${apiKey.length})`);
-  console.log(`[GoogleMaps] Fetching for exact bounds: [${bounds.minLng.toFixed(6)}, ${bounds.minLat.toFixed(6)}, ${bounds.maxLng.toFixed(6)}, ${bounds.maxLat.toFixed(6)}]`);
+  console.log(`[GoogleMaps] Target bounds: [${bounds.minLng.toFixed(6)}, ${bounds.minLat.toFixed(6)}, ${bounds.maxLng.toFixed(6)}, ${bounds.maxLat.toFixed(6)}]`);
 
-  // Use 'visible' parameter to force Google Maps to show EXACT bounding box
-  // This ensures the returned image covers exactly the same area as Earth Engine
-  const url = new URL('https://maps.googleapis.com/maps/api/staticmap');
+  // Calculate center
+  const centerLat = (bounds.minLat + bounds.maxLat) / 2;
+  const centerLng = (bounds.minLng + bounds.maxLng) / 2;
   
-  // visible parameter with SW and NE corners forces exact bounds
-  const visiblePath = `${bounds.minLat},${bounds.minLng}|${bounds.maxLat},${bounds.maxLng}`;
-  url.searchParams.set('visible', visiblePath);
-  url.searchParams.set('size', `${size}x${size}`);
-  url.searchParams.set('scale', '2'); // 2x for higher resolution (1280x1280)
+  // Calculate aspect ratio from bounds (accounting for latitude distortion)
+  const latRange = bounds.maxLat - bounds.minLat;
+  const lngRange = bounds.maxLng - bounds.minLng;
+  const latDistortion = Math.cos(centerLat * Math.PI / 180);
+  const realWorldWidth = lngRange * latDistortion;
+  const realWorldHeight = latRange;
+  const aspectRatio = realWorldWidth / realWorldHeight;
+  
+  // Calculate dimensions maintaining aspect ratio
+  // Earth Engine uses dimensions=1200, which gives ~1200 on the longer side
+  let width: number, height: number;
+  if (aspectRatio > 1) {
+    // Wider than tall
+    width = targetDimension;
+    height = Math.round(targetDimension / aspectRatio);
+  } else {
+    // Taller than wide  
+    height = targetDimension;
+    width = Math.round(targetDimension * aspectRatio);
+  }
+  
+  // Google Maps max is 640 per side (with scale=2 gives 1280)
+  // We need to scale down if needed
+  const scale = 2;
+  const maxGoogleSize = 640;
+  
+  let googleWidth = Math.ceil(width / scale);
+  let googleHeight = Math.ceil(height / scale);
+  
+  if (googleWidth > maxGoogleSize || googleHeight > maxGoogleSize) {
+    const scaleFactor = maxGoogleSize / Math.max(googleWidth, googleHeight);
+    googleWidth = Math.round(googleWidth * scaleFactor);
+    googleHeight = Math.round(googleHeight * scaleFactor);
+  }
+  
+  // Ensure minimum size
+  googleWidth = Math.max(100, googleWidth);
+  googleHeight = Math.max(100, googleHeight);
+  
+  const finalWidth = googleWidth * scale;
+  const finalHeight = googleHeight * scale;
+  
+  console.log(`[GoogleMaps] Calculated dimensions: ${googleWidth}x${googleHeight} (scale ${scale} = ${finalWidth}x${finalHeight})`);
+  console.log(`[GoogleMaps] Aspect ratio: ${aspectRatio.toFixed(3)}`);
+
+  // Calculate optimal zoom level to fit the bounds
+  const zoom = calculateZoomLevel(bounds, finalWidth, finalHeight);
+  
+  console.log(`[GoogleMaps] Center: ${centerLat.toFixed(6)}, ${centerLng.toFixed(6)}, Zoom: ${zoom}`);
+
+  // Fetch from Google Maps using center and zoom
+  const url = new URL('https://maps.googleapis.com/maps/api/staticmap');
+  url.searchParams.set('center', `${centerLat},${centerLng}`);
+  url.searchParams.set('zoom', zoom.toString());
+  url.searchParams.set('size', `${googleWidth}x${googleHeight}`);
+  url.searchParams.set('scale', scale.toString());
   url.searchParams.set('maptype', 'satellite');
   url.searchParams.set('key', apiKey);
 
@@ -77,8 +128,8 @@ export async function fetchGoogleMapsSatelliteSimple(
   const arrayBuffer = await response.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
   
-  console.log(`[GoogleMaps] ✅ Satellite image fetched (${buffer.length} bytes)`);
-  return buffer;
+  console.log(`[GoogleMaps] ✅ Satellite image fetched (${buffer.length} bytes, ${finalWidth}x${finalHeight})`);
+  return { buffer, width: finalWidth, height: finalHeight };
 }
 
 /**
