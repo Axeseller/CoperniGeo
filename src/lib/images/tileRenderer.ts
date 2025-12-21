@@ -1,6 +1,5 @@
 import puppeteer from 'puppeteer-core';
-// Try full chromium package - chromium-min has extraction path issues
-import chromium from '@sparticuz/chromium';
+import chromium from '@sparticuz/chromium-min';
 
 // Use any for browser type to avoid version mismatches
 let browserInstance: any = null;
@@ -21,31 +20,10 @@ async function getBrowser(): Promise<any> {
     console.log('[TileRenderer] Using @sparticuz/chromium-min for Vercel');
     
     try {
-      // Force chromium-min to extract to /tmp (Vercel allows /tmp)
-      // Change working directory to /tmp to avoid relative path issues
-      const originalCwd = process.cwd();
-      try {
-        process.chdir('/tmp');
-      } catch (chdirError) {
-        // If /tmp doesn't work, try setting env vars
-        if (!process.env.TMPDIR) {
-          process.env.TMPDIR = '/tmp';
-        }
-        if (!process.env.TMP) {
-          process.env.TMP = '/tmp';
-        }
-      }
-      
-      // @sparticuz/chromium-min will extract relative to current working directory
+      // @sparticuz/chromium-min handles extraction automatically
+      // It will extract to /tmp in Vercel's serverless environment
       const executablePath = await chromium.executablePath();
       console.log(`[TileRenderer] Chromium executable path: ${executablePath}`);
-      
-      // Restore original working directory
-      try {
-        process.chdir(originalCwd);
-      } catch (chdirError) {
-        // Ignore if we can't restore (shouldn't happen)
-      }
       
       browserInstance = await puppeteer.launch({
         args: [
