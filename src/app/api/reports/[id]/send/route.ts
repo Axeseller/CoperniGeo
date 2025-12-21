@@ -9,14 +9,14 @@ import { IndexType } from "@/types/report";
 import { getFrequencyLabel } from "@/lib/utils/reports";
 import { calculatePolygonArea, squareMetersToKm } from "@/lib/utils/geometry";
 import { uploadImageWithDedup, uploadPDFAdmin } from "@/lib/storage/admin-upload";
-import { compositeIndexOverlay } from '@/lib/images/compositeImage';
+import { compositeIndexOverlay, fetchGoogleMapsSatelliteWithBounds } from '@/lib/images/compositeImage';
 import { renderMapWithTiles } from '@/lib/images/tileRenderer';
 import sharp from 'sharp';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120; // Allow up to 120 seconds for processing (reports may take longer)
 
-// v3.1 - Earth Engine composite (same approach that worked on Dec 14, 2025)
+// v3.2 - Google Maps background + Earth Engine overlay (high quality, resized for alignment)
 
 /**
  * POST /api/reports/[id]/send
@@ -725,25 +725,55 @@ async function generateReportEmail(
       } catch (renderError: any) {
         // Chrome/Puppeteer not available in Vercel - this is expected, fallback handles it
         console.log(`[Email] Tile rendering failed: ${renderError.message}`);
-        console.log(`[Email] Falling back to Earth Engine composite (guaranteed alignment)...`);
+        console.log(`[Email] Falling back to Google Maps + Earth Engine composite...`);
         
-        // Fallback: Use Earth Engine for BOTH base satellite and index overlay
-        // This ensures perfect alignment since both images use the same coordinate system
-        if (baseBuffer && overlayBuffer && data.coordinates && data.coordinates.length >= 3) {
+        // Fallback: Use Google Maps for high-quality background, resize EE overlay to match
+        if (overlayBuffer && data.coordinates && data.coordinates.length >= 3) {
           try {
+            // Step 1: Fetch high-quality Google Maps satellite
+            console.log(`[Email] Fetching Google Maps satellite...`);
+            const gmaps = await fetchGoogleMapsSatelliteWithBounds(data.coordinates, 1200);
+            console.log(`[Email] ✅ Google Maps fetched (${gmaps.buffer.length} bytes, ${gmaps.width}x${gmaps.height})`);
+            
+            // Step 2: Resize the already-downloaded EE overlay to match Google Maps dimensions
+            // This is fast (no Earth Engine API calls) and maintains alignment
+            console.log(`[Email] Resizing Earth Engine overlay to match Google Maps dimensions...`);
+            const resizedOverlay = await sharp(overlayBuffer)
+              .resize(gmaps.width, gmaps.height, { fit: 'fill' })
+              .toBuffer();
+            console.log(`[Email] ✅ Overlay resized to ${gmaps.width}x${gmaps.height}`);
+            
+            // Step 3: Composite them together
             finalImageBuffer = await compositeIndexOverlay(
-              baseBuffer,
-              overlayBuffer,
+              gmaps.buffer,
+              resizedOverlay,
               data.coordinates,
               0.7,
               '#5db815'
             );
-            console.log(`[Email] ✅ Earth Engine composite generated (${finalImageBuffer.length} bytes)`);
-          } catch (compositeError: any) {
-            console.error(`[Email] Earth Engine composite failed: ${compositeError.message}`);
+            console.log(`[Email] ✅ High-quality Google Maps composite generated (${finalImageBuffer.length} bytes)`);
+          } catch (gmapsError: any) {
+            console.error(`[Email] Google Maps composite failed: ${gmapsError.message}`);
+            
+            // Final fallback: Earth Engine only (lower quality but guaranteed to work)
+            if (baseBuffer && overlayBuffer) {
+              try {
+                console.log(`[Email] Final fallback: Earth Engine-only composite...`);
+                finalImageBuffer = await compositeIndexOverlay(
+                  baseBuffer,
+                  overlayBuffer,
+                  data.coordinates,
+                  0.7,
+                  '#5db815'
+                );
+                console.log(`[Email] ✅ Earth Engine fallback composite generated (${finalImageBuffer.length} bytes)`);
+              } catch (eeError: any) {
+                console.error(`[Email] Earth Engine composite also failed: ${eeError.message}`);
+              }
+            }
           }
         } else {
-          console.log(`[Email] Missing base/overlay buffers or coordinates for composite`);
+          console.log(`[Email] Missing overlay buffer or coordinates for composite`);
         }
       }
     } else {
