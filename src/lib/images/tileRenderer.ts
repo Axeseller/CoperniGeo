@@ -25,16 +25,17 @@ async function getBrowser(): Promise<any> {
       
       browserInstance = await puppeteer.launch({
         args: [
-          ...chromium.args,
           '--no-sandbox',
           '--disable-setuid-sandbox',
           '--disable-dev-shm-usage',
           '--disable-gpu',
+          '--disable-software-rasterizer',
+          '--disable-extensions',
           '--single-process', // Required for Vercel serverless
         ],
-        defaultViewport: chromium.defaultViewport,
+        defaultViewport: { width: 1920, height: 1080 },
         executablePath: executablePath,
-        headless: chromium.headless,
+        headless: true,
       });
     } catch (chromiumError: any) {
       console.error('[TileRenderer] Chromium initialization error:', chromiumError.message);
