@@ -19,15 +19,43 @@ async function getBrowser(): Promise<any> {
   if (process.env.VERCEL) {
     console.log('[TileRenderer] Using @sparticuz/chromium for Vercel');
     
-    const executablePath = await chromium.executablePath();
-    console.log(`[TileRenderer] Chromium executable path: ${executablePath}`);
-    
-    browserInstance = await puppeteer.launch({
-      args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox'],
-      defaultViewport: chromium.defaultViewport,
-      executablePath: executablePath,
-      headless: chromium.headless,
-    });
+    try {
+      // Configure chromium for serverless environment BEFORE calling executablePath
+      chromium.setGraphicsMode(false);
+      chromium.setHeadlessMode(true);
+      
+      // Download fonts (optional, but improves rendering)
+      try {
+        await chromium.font();
+      } catch (fontError: any) {
+        console.log('[TileRenderer] Font download skipped (optional):', fontError.message);
+      }
+      
+      const executablePath = await chromium.executablePath();
+      console.log(`[TileRenderer] Chromium executable path: ${executablePath}`);
+      
+      browserInstance = await puppeteer.launch({
+        args: [
+          ...chromium.args,
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+          '--single-process', // Required for Vercel serverless
+        ],
+        defaultViewport: chromium.defaultViewport,
+        executablePath: executablePath,
+        headless: chromium.headless,
+      });
+    } catch (chromiumError: any) {
+      console.error('[TileRenderer] Chromium initialization error:', chromiumError.message);
+      console.error('[TileRenderer] Error details:', {
+        message: chromiumError.message,
+        code: chromiumError.code,
+        path: chromiumError.path,
+      });
+      throw new Error(`Failed to initialize Chromium on Vercel: ${chromiumError.message}`);
+    }
   } else {
     // Use local puppeteer for development
     console.log('[TileRenderer] Using local Puppeteer for development');
