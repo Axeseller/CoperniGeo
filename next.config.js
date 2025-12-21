@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Required for puppeteer-core and @sparticuz/chromium to work on Vercel
-  serverExternalPackages: ['puppeteer-core', '@sparticuz/chromium'],
+  // Note: serverExternalPackages is not available in Next.js 14.2
+  // The packages should work without explicit configuration
 };
 
 module.exports = nextConfig;

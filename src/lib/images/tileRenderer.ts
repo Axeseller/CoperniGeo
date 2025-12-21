@@ -20,17 +20,6 @@ async function getBrowser(): Promise<any> {
     console.log('[TileRenderer] Using @sparticuz/chromium for Vercel');
     
     try {
-      // Configure chromium for serverless environment BEFORE calling executablePath
-      chromium.setGraphicsMode(false);
-      chromium.setHeadlessMode(true);
-      
-      // Download fonts (optional, but improves rendering)
-      try {
-        await chromium.font();
-      } catch (fontError: any) {
-        console.log('[TileRenderer] Font download skipped (optional):', fontError.message);
-      }
-      
       const executablePath = await chromium.executablePath();
       console.log(`[TileRenderer] Chromium executable path: ${executablePath}`);
       
