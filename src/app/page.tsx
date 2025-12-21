@@ -1112,23 +1112,13 @@ export default function Home() {
               <h3 className="text-gray-400 font-bold text-sm mb-4">Producto</h3>
               <ul className="space-y-2.5">
                 <li>
-                  <Link href="/dashboard/planes" className="text-gray-400 hover:text-white transition-colors text-sm">
+                  <Link href="/precios" className="text-gray-400 hover:text-white transition-colors text-sm">
                     Precios
                   </Link>
                 </li>
                 <li>
-                  <Link href="#" className="text-gray-400 hover:text-white transition-colors text-sm">
-                    API
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#" className="text-gray-400 hover:text-white transition-colors text-sm">
-                    Documentación
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#" className="text-gray-400 hover:text-white transition-colors text-sm">
-                    Integraciones
+                  <Link href="/especificaciones" className="text-gray-400 hover:text-white transition-colors text-sm">
+                    Especificaciones
                   </Link>
                 </li>
               </ul>
@@ -1139,17 +1129,17 @@ export default function Home() {
               <h3 className="text-gray-400 font-bold text-sm mb-4">Empresa</h3>
               <ul className="space-y-2.5">
                 <li>
-                  <Link href="#" className="text-gray-400 hover:text-white transition-colors text-sm">
+                  <Link href="/sobre-nosotros" className="text-gray-400 hover:text-white transition-colors text-sm">
                     Sobre nosotros
                   </Link>
                 </li>
                 <li>
-                  <Link href="#" className="text-gray-400 hover:text-white transition-colors text-sm">
+                  <Link href="/clientes" className="text-gray-400 hover:text-white transition-colors text-sm">
                     Clientes
                   </Link>
                 </li>
                 <li>
-                  <Link href="#" className="text-gray-400 hover:text-white transition-colors text-sm">
+                  <Link href="/blog" className="text-gray-400 hover:text-white transition-colors text-sm">
                     Blog
                   </Link>
                 </li>
@@ -1166,22 +1156,17 @@ export default function Home() {
                   </Link>
                 </li>
                 <li>
-                  <Link href="#" className="text-gray-400 hover:text-white transition-colors text-sm">
-                    Documentación
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#" className="text-gray-400 hover:text-white transition-colors text-sm">
+                  <Link href="/guias" className="text-gray-400 hover:text-white transition-colors text-sm">
                     Guías
                   </Link>
                 </li>
                 <li>
-                  <Link href="#" className="text-gray-400 hover:text-white transition-colors text-sm">
+                  <Link href="/privacidad" className="text-gray-400 hover:text-white transition-colors text-sm">
                     Privacidad
                   </Link>
                 </li>
                 <li>
-                  <Link href="#" className="text-gray-400 hover:text-white transition-colors text-sm">
+                  <Link href="/terminos" className="text-gray-400 hover:text-white transition-colors text-sm">
                     Términos
                   </Link>
                 </li>
@@ -1193,7 +1178,7 @@ export default function Home() {
               <h3 className="text-gray-400 font-bold text-sm mb-4">Conectar</h3>
               <ul className="space-y-2.5">
                 <li>
-                  <Link href="#" className="text-gray-400 hover:text-white transition-colors text-sm">
+                  <Link href="/contacto" className="text-gray-400 hover:text-white transition-colors text-sm">
                     Contacto
                   </Link>
                 </li>

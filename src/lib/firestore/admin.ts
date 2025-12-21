@@ -348,7 +348,21 @@ export async function updateReportAdmin(
     const db = getAdminFirestore();
     const docRef = db.collection('reports').doc(reportId);
     
-    await docRef.update(updates);
+    // Filter out undefined values (Firestore doesn't allow undefined)
+    const updateData: any = {};
+    Object.keys(updates).forEach((key) => {
+      const value = (updates as any)[key];
+      if (value !== undefined) {
+        updateData[key] = value;
+      }
+    });
+    
+    // Normalize phone number if provided
+    if (updateData.phoneNumber) {
+      updateData.phoneNumber = updateData.phoneNumber.replace(/\D/g, "");
+    }
+    
+    await docRef.update(updateData);
     
     console.log(`[Admin Firestore] ✅ Report ${reportId} updated successfully`);
   } catch (error: any) {

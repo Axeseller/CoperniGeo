@@ -112,10 +112,20 @@ export async function createReport(
     
     // Normalize phone number if provided (remove all non-digits)
     // This ensures consistent storage format
-    const normalizedReport = {
+    // Only include phoneNumber/email if they have values (Firestore doesn't allow undefined)
+    const normalizedReport: any = {
       ...report,
-      phoneNumber: report.phoneNumber ? report.phoneNumber.replace(/\D/g, "") : undefined,
     };
+    
+    // Only include phoneNumber if provided
+    if (report.phoneNumber) {
+      normalizedReport.phoneNumber = report.phoneNumber.replace(/\D/g, "");
+    }
+    
+    // Only include email if provided
+    if (report.email) {
+      normalizedReport.email = report.email;
+    }
     
     const db = getDb();
     const reportData = {
@@ -166,7 +176,20 @@ export async function updateReport(
 ): Promise<void> {
   const db = getDb();
   const docRef = doc(db, REPORTS_COLLECTION, reportId);
-  const updateData: any = { ...updates };
+  
+  // Filter out undefined values (Firestore doesn't allow undefined)
+  const updateData: any = {};
+  Object.keys(updates).forEach((key) => {
+    const value = (updates as any)[key];
+    if (value !== undefined) {
+      updateData[key] = value;
+    }
+  });
+  
+  // Normalize phone number if provided
+  if (updateData.phoneNumber) {
+    updateData.phoneNumber = updateData.phoneNumber.replace(/\D/g, "");
+  }
   
   // Recalculate nextRun if frequency changed
   if (updates.frequency) {

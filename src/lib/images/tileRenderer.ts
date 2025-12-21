@@ -19,6 +19,7 @@ let browserInstance: any = null;
 /**
  * Downloads and caches the Chromium executable path.
  * Uses a download promise to prevent concurrent downloads.
+ * Only used on Vercel - not in local development.
  */
 async function getChromiumPath(): Promise<string> {
   // Return cached path if available
@@ -26,19 +27,34 @@ async function getChromiumPath(): Promise<string> {
 
   // Prevent concurrent downloads by reusing the same promise
   if (!downloadPromise) {
-    const chromium = (await import("@sparticuz/chromium-min")).default;
+    // Only import chromium-min on Vercel
+    if (!process.env.VERCEL && !process.env.VERCEL_ENV) {
+      throw new Error('getChromiumPath should only be called on Vercel');
+    }
+    
+    // Use dynamic import with a variable to prevent Next.js from statically analyzing it
+    // This ensures the module is only loaded at runtime on Vercel
+    const moduleName = '@sparticuz/chromium-min';
+    const chromiumModule = await import(moduleName);
+    const chromium = chromiumModule.default || chromiumModule;
+    
     downloadPromise = chromium
       .executablePath(CHROMIUM_PACK_URL)
-      .then((path) => {
+      .then((path: string) => {
         cachedExecutablePath = path;
         console.log('[TileRenderer] Chromium path resolved:', path);
         return path;
       })
-      .catch((error) => {
+      .catch((error: any) => {
         console.error('[TileRenderer] Failed to get Chromium path:', error);
         downloadPromise = null; // Reset on error to allow retry
         throw error;
       });
+  }
+
+  // TypeScript assertion: we know downloadPromise is set in the if block above
+  if (!downloadPromise) {
+    throw new Error('Failed to initialize Chromium download promise');
   }
 
   return downloadPromise;
@@ -54,13 +70,23 @@ async function getBrowser(): Promise<any> {
   }
 
   console.log('[TileRenderer] Launching headless browser...');
+  console.log('[TileRenderer] Environment check:', {
+    VERCEL: process.env.VERCEL,
+    VERCEL_ENV: process.env.VERCEL_ENV,
+    NODE_ENV: process.env.NODE_ENV,
+  });
   
-  // Use @sparticuz/chromium-min on Vercel (recommended by Vercel docs)
+  // Try Vercel chromium first if we're on Vercel, otherwise use local puppeteer
+  // Use a try-catch to gracefully fall back to local puppeteer if chromium-min fails
   if (process.env.VERCEL || process.env.VERCEL_ENV) {
-    console.log('[TileRenderer] Using @sparticuz/chromium-min for Vercel');
+    console.log('[TileRenderer] Attempting to use @sparticuz/chromium-min for Vercel');
     
     try {
-      const chromium = (await import("@sparticuz/chromium-min")).default;
+      // Use dynamic import with a variable to prevent Next.js from statically analyzing it
+      // This ensures the module is only loaded at runtime on Vercel
+      const moduleName = '@sparticuz/chromium-min';
+      const chromiumModule = await import(moduleName);
+      const chromium = chromiumModule.default || chromiumModule;
       const executablePath = await getChromiumPath();
       console.log(`[TileRenderer] Chromium executable path: ${executablePath}`);
       
@@ -69,24 +95,27 @@ async function getBrowser(): Promise<any> {
         executablePath: executablePath,
         headless: true,
       });
+      
+      console.log('[TileRenderer] ✅ Browser launched with Vercel Chromium');
+      return browserInstance;
     } catch (chromiumError: any) {
-      console.error('[TileRenderer] Chromium initialization error:', chromiumError.message);
-      console.error('[TileRenderer] Error details:', {
-        message: chromiumError.message,
-        code: chromiumError.code,
-        path: chromiumError.path,
-        stack: chromiumError.stack?.substring(0, 500),
-      });
-      throw new Error(`Failed to initialize Chromium on Vercel: ${chromiumError.message}`);
+      console.warn('[TileRenderer] Vercel Chromium failed, falling back to local Puppeteer:', chromiumError.message);
+      // Fall through to local puppeteer
     }
-  } else {
-    // Use local puppeteer for development
-    console.log('[TileRenderer] Using local Puppeteer for development');
+  }
+  
+  // Use local puppeteer for development (or as fallback)
+  console.log('[TileRenderer] Using local Puppeteer');
+  try {
     const puppeteerLocal = await import('puppeteer');
     browserInstance = await puppeteerLocal.default.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
+    console.log('[TileRenderer] ✅ Browser launched with local Puppeteer');
+  } catch (puppeteerError: any) {
+    console.error('[TileRenderer] Local Puppeteer initialization error:', puppeteerError.message);
+    throw new Error(`Failed to initialize Puppeteer: ${puppeteerError.message}`);
   }
   
   console.log('[TileRenderer] ✅ Browser launched');
