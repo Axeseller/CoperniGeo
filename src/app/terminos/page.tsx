@@ -151,7 +151,7 @@ export default function TerminosPage() {
 
               <h2 className="text-2xl font-bold text-[#242424] mt-8 mb-4">5. Limitación de Responsabilidad</h2>
               <p className="text-[#898989] text-lg leading-relaxed mb-6">
-                CoperniGeo se proporciona "tal cual" sin garantías de ningún tipo. No garantizamos que 
+                CoperniGeo se proporciona &ldquo;tal cual&rdquo; sin garantías de ningún tipo. No garantizamos que 
                 el servicio será ininterrumpido, seguro o libre de errores. En ningún caso seremos 
                 responsables por daños indirectos, incidentales o consecuentes.
               </p>

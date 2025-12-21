@@ -19,6 +19,7 @@ html {
   width: 100%;
   max-width: 100%;
   position: relative;
+  scrollbar-gutter: stable;
 }
 
 body {

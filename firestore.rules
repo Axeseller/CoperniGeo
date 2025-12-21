@@ -136,6 +136,31 @@ service cloud.firestore {
     }
     
     // ============================================
+    // USER PLANS COLLECTION
+    // ============================================
+    match /userPlans/{planId} {
+      // Users can read their own plans
+      allow read: if isAuthenticated() && isOwner(resource.data.userId);
+      
+      // Users can create their own plan (for basic plan signup)
+      allow create: if isAuthenticated() 
+                    && hasValidUserId()
+                    && request.resource.data.keys().hasAll(['userId', 'planType', 'startDate', 'endDate', 'status', 'createdAt', 'updatedAt'])
+                    && request.resource.data.planType is string
+                    && request.resource.data.planType in ['basic', 'professional', 'enterprise']
+                    && request.resource.data.status is string
+                    && request.resource.data.status == 'active';
+      
+      // Users can update their own plan
+      allow update: if isAuthenticated() 
+                   && isOwner(resource.data.userId)
+                   && hasValidUserId();
+      
+      // Users cannot delete plans (only server can)
+      allow delete: if false;
+    }
+    
+    // ============================================
     // DEFAULT DENY (Security by default)
     // ============================================
     // Any collection not explicitly allowed above is denied

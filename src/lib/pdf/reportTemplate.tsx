@@ -88,7 +88,6 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     alignItems: "center",
     justifyContent: "center",
-    flex: 1,
   },
   image: {
     width: "100%",
@@ -137,8 +136,8 @@ export const ReportPDF: React.FC<ReportPDFProps> = ({ report, imageData, reportD
     </Page>
 
     {/* One page per index with image */}
-        {imageData.map((data, index) => (
-      <Page key={index} size="A4" style={styles.page}>
+    {imageData.map((data, index) => (
+      <Page key={index} size="A4" style={styles.page} wrap={false}>
         <View style={styles.header}>
           <Text style={styles.title}>{data.areaName}</Text>
           <Text style={styles.subtitle}>{data.indexType}</Text>
@@ -146,19 +145,19 @@ export const ReportPDF: React.FC<ReportPDFProps> = ({ report, imageData, reportD
 
         <View style={styles.statsContainer}>
           <Text style={styles.sectionTitle}>Estadísticas</Text>
-            <Text style={styles.statsText}>
-              <Text style={styles.statsLabel}>Mínimo:</Text> {data.stats.min.toFixed(3)}
-            </Text>
-            <Text style={styles.statsText}>
-              <Text style={styles.statsLabel}>Máximo:</Text> {data.stats.max.toFixed(3)}
-            </Text>
-            <Text style={styles.statsText}>
-              <Text style={styles.statsLabel}>Promedio:</Text> {data.stats.mean.toFixed(3)}
-            </Text>
+          <Text style={styles.statsText}>
+            <Text style={styles.statsLabel}>Mínimo:</Text> {data.stats.min.toFixed(3)}
+          </Text>
+          <Text style={styles.statsText}>
+            <Text style={styles.statsLabel}>Máximo:</Text> {data.stats.max.toFixed(3)}
+          </Text>
+          <Text style={styles.statsText}>
+            <Text style={styles.statsLabel}>Promedio:</Text> {data.stats.mean.toFixed(3)}
+          </Text>
         </View>
 
-            {data.imageUrl && (
-              <View style={styles.imageContainer}>
+        {data.imageUrl && (
+          <View style={styles.imageContainer}>
             {/* eslint-disable-next-line jsx-a11y/alt-text */}
             <Image 
               src={data.imageUrl} 
@@ -174,10 +173,10 @@ export const ReportPDF: React.FC<ReportPDFProps> = ({ report, imageData, reportD
           </View>
         )}
 
-      <View style={styles.footer}>
+        <View style={styles.footer}>
           <Text>Página {index + 2} de {imageData.length + 1}</Text>
-      </View>
-    </Page>
+        </View>
+      </Page>
     ))}
   </Document>
 );

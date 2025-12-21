@@ -149,7 +149,7 @@ export default function ClientesPage() {
                 <div className="text-4xl mb-4">{client.logo}</div>
                 <h3 className="text-xl font-bold text-[#242424] mb-2">{client.name}</h3>
                 <p className="text-[#5db815] text-sm mb-4">{client.industry}</p>
-                <p className="text-[#898989] leading-relaxed">"{client.testimonial}"</p>
+                <p className="text-[#898989] leading-relaxed">&ldquo;{client.testimonial}&rdquo;</p>
               </div>
             ))}
           </div>

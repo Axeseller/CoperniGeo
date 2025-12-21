@@ -3,10 +3,13 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 export default function PreciosPage() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [remainingSpots, setRemainingSpots] = useState<number | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -29,11 +32,29 @@ export default function PreciosPage() {
     };
   }, [isMobileMenuOpen]);
 
+  useEffect(() => {
+    // Fetch remaining basic plan spots
+    fetch('/api/plans/basic-spots')
+      .then(res => res.json())
+      .then(data => {
+        if (data.remaining !== undefined) {
+          setRemainingSpots(data.remaining);
+        }
+      })
+      .catch(err => {
+        console.error('Error fetching remaining spots:', err);
+      });
+  }, []);
+
+  const handleBasicPlanClick = () => {
+    router.push('/precios/plan-basico');
+  };
+
   const plans = [
     {
       name: "Básico",
       price: "Gratis",
-      period: "siempre",
+      period: "1 año",
       description: "Perfecto para empezar a explorar",
       features: [
         "Hasta 3 áreas de interés",
@@ -44,11 +65,15 @@ export default function PreciosPage() {
       ],
       cta: "Comenzar gratis",
       highlighted: false,
+      onClick: handleBasicPlanClick,
+      badge: remainingSpots !== null && remainingSpots > 0 
+        ? `${remainingSpots} espacios disponibles` 
+        : null,
     },
     {
       name: "Profesional",
-      price: "$49",
-      period: "mes",
+      price: "$2,000",
+      period: "año",
       description: "Para equipos y proyectos serios",
       features: [
         "Áreas ilimitadas",
@@ -62,6 +87,7 @@ export default function PreciosPage() {
       ],
       cta: "Comenzar prueba",
       highlighted: true,
+      onClick: () => router.push('/registrarte'),
     },
     {
       name: "Empresarial",
@@ -80,6 +106,7 @@ export default function PreciosPage() {
       ],
       cta: "Contactar ventas",
       highlighted: false,
+      onClick: () => router.push('/contacto'),
     },
   ];
 
@@ -234,6 +261,11 @@ export default function PreciosPage() {
                     Popular
                   </div>
                 )}
+                {plan.badge && (
+                  <div className="absolute top-0 left-0 bg-yellow-400 text-yellow-900 px-4 py-1 text-xs font-semibold">
+                    {plan.badge}
+                  </div>
+                )}
                 <div className="p-8">
                   <h3 className="text-2xl font-bold text-[#121212] mb-2">
                     {plan.name}
@@ -267,8 +299,8 @@ export default function PreciosPage() {
                       </li>
                     ))}
                   </ul>
-                  <Link
-                    href="/registrarte"
+                  <button
+                    onClick={plan.onClick}
                     className={`block w-full text-center px-6 py-3 rounded-md text-sm font-medium transition-colors ${
                       plan.highlighted
                         ? 'bg-[#5db815] text-white hover:bg-[#4a9a11]'
@@ -276,7 +308,7 @@ export default function PreciosPage() {
                     }`}
                   >
                     {plan.cta}
-                  </Link>
+                  </button>
                 </div>
               </div>
             ))}

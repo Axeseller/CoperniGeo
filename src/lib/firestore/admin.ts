@@ -2,6 +2,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { getAdminApp } from '@/lib/firebase-admin';
 import { Area } from '@/types/area';
 import { Report } from '@/types/report';
+import { UserPlan, PlanType } from '@/types/plan';
 
 /**
  * Get Firestore instance using Admin SDK (server-side only)
@@ -367,6 +368,85 @@ export async function updateReportAdmin(
     console.log(`[Admin Firestore] ✅ Report ${reportId} updated successfully`);
   } catch (error: any) {
     console.error(`[Admin Firestore] Error updating report:`, error.message);
+    throw error;
+  }
+}
+
+/**
+ * Get count of active basic plans using Admin SDK (bypasses security rules)
+ * For server-side use only (API routes)
+ */
+export async function getBasicPlanCountAdmin(): Promise<number> {
+  try {
+    const db = getAdminFirestore();
+    const snapshot = await db.collection('userPlans')
+      .where('planType', '==', 'basic')
+      .where('status', '==', 'active')
+      .get();
+    
+    return snapshot.size;
+  } catch (error: any) {
+    console.error('[Admin Firestore] Error getting basic plan count:', error.message);
+    throw error;
+  }
+}
+
+/**
+ * Get remaining basic plan spots using Admin SDK
+ */
+export async function getRemainingBasicPlanSpotsAdmin(): Promise<number> {
+  try {
+    const BASIC_PLAN_LIMIT = 15;
+    const count = await getBasicPlanCountAdmin();
+    return Math.max(0, BASIC_PLAN_LIMIT - count);
+  } catch (error: any) {
+    console.error('[Admin Firestore] Error getting remaining basic plan spots:', error.message);
+    throw error;
+  }
+}
+
+/**
+ * Create a user plan using Admin SDK (bypasses security rules)
+ * For server-side use only (API routes)
+ */
+export async function createUserPlanAdmin(
+  userId: string,
+  planType: PlanType,
+  feedbackAgreement?: boolean,
+  cropType?: string,
+  hectares?: number
+): Promise<string> {
+  try {
+    const db = getAdminFirestore();
+    const now = new Date();
+    const endDate = new Date(now);
+    endDate.setFullYear(endDate.getFullYear() + 1); // 1 year from now
+    
+    const planData: any = {
+      userId,
+      planType,
+      startDate: now,
+      endDate: endDate,
+      status: 'active',
+      createdAt: now,
+      updatedAt: now,
+    };
+    
+    if (feedbackAgreement !== undefined) {
+      planData.feedbackAgreement = feedbackAgreement;
+    }
+    if (cropType) {
+      planData.cropType = cropType;
+    }
+    if (hectares !== undefined) {
+      planData.hectares = hectares;
+    }
+    
+    const docRef = await db.collection('userPlans').add(planData);
+    console.log(`[Admin Firestore] ✅ User plan created successfully with ID: ${docRef.id}`);
+    return docRef.id;
+  } catch (error: any) {
+    console.error('[Admin Firestore] ❌ Error creating user plan:', error.message);
     throw error;
   }
 }

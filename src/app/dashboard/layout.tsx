@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { useAuth } from "@/context/AuthContext";
 
@@ -25,8 +26,15 @@ export default function DashboardLayout({
           {/* Sidebar */}
           <aside className="w-64 bg-white shadow-lg min-h-screen border-r border-gray-200">
             <div className="p-6">
-              <Link href="/">
-                <h1 className="text-2xl font-bold text-[#5db815] mb-8 hover:text-[#4a9a11] cursor-pointer transition-colors">
+              <Link href="/" className="flex items-center space-x-2 mb-8">
+                <Image
+                  src="/logo2.svg"
+                  alt="CoperniGeo Logo"
+                  width={32}
+                  height={32}
+                  className="w-8 h-8"
+                />
+                <h1 className="text-2xl font-bold text-[#5db815] hover:text-[#4a9a11] cursor-pointer transition-colors">
                   CoperniGeo
                 </h1>
               </Link>
