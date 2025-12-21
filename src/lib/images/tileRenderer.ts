@@ -1,5 +1,5 @@
 import puppeteer from 'puppeteer-core';
-import chromium from '@sparticuz/chromium';
+import chromium from '@sparticuz/chromium-min';
 
 // Use any for browser type to avoid version mismatches
 let browserInstance: any = null;
@@ -15,11 +15,12 @@ async function getBrowser(): Promise<any> {
 
   console.log('[TileRenderer] Launching headless browser...');
   
-  // Use the provided Chromium executable path on Vercel
+  // Use @sparticuz/chromium-min on Vercel (recommended by Vercel docs)
   if (process.env.VERCEL) {
-    console.log('[TileRenderer] Using @sparticuz/chromium for Vercel');
+    console.log('[TileRenderer] Using @sparticuz/chromium-min for Vercel');
     
     try {
+      // @sparticuz/chromium-min handles extraction automatically
       const executablePath = await chromium.executablePath();
       console.log(`[TileRenderer] Chromium executable path: ${executablePath}`);
       
@@ -43,6 +44,7 @@ async function getBrowser(): Promise<any> {
         message: chromiumError.message,
         code: chromiumError.code,
         path: chromiumError.path,
+        stack: chromiumError.stack?.substring(0, 500),
       });
       throw new Error(`Failed to initialize Chromium on Vercel: ${chromiumError.message}`);
     }
