@@ -1,8 +1,48 @@
 import puppeteer from 'puppeteer-core';
-import chromium from '@sparticuz/chromium-min';
+
+// URL to the Chromium binary package hosted in /public
+// In production, this will be served from your Vercel domain
+// For local dev or if not in production, use a fallback URL
+const CHROMIUM_PACK_URL = process.env.VERCEL_PROJECT_PRODUCTION_URL
+  ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}/chromium-pack.tar`
+  : process.env.VERCEL_URL
+  ? `https://${process.env.VERCEL_URL}/chromium-pack.tar`
+  : "https://github.com/gabenunez/puppeteer-on-vercel/raw/refs/heads/main/example/chromium-dont-use-in-prod.tar";
+
+// Cache the Chromium executable path to avoid re-downloading
+let cachedExecutablePath: string | null = null;
+let downloadPromise: Promise<string> | null = null;
 
 // Use any for browser type to avoid version mismatches
 let browserInstance: any = null;
+
+/**
+ * Downloads and caches the Chromium executable path.
+ * Uses a download promise to prevent concurrent downloads.
+ */
+async function getChromiumPath(): Promise<string> {
+  // Return cached path if available
+  if (cachedExecutablePath) return cachedExecutablePath;
+
+  // Prevent concurrent downloads by reusing the same promise
+  if (!downloadPromise) {
+    const chromium = (await import("@sparticuz/chromium-min")).default;
+    downloadPromise = chromium
+      .executablePath(CHROMIUM_PACK_URL)
+      .then((path) => {
+        cachedExecutablePath = path;
+        console.log('[TileRenderer] Chromium path resolved:', path);
+        return path;
+      })
+      .catch((error) => {
+        console.error('[TileRenderer] Failed to get Chromium path:', error);
+        downloadPromise = null; // Reset on error to allow retry
+        throw error;
+      });
+  }
+
+  return downloadPromise;
+}
 
 /**
  * Get or create a shared browser instance
@@ -16,26 +56,16 @@ async function getBrowser(): Promise<any> {
   console.log('[TileRenderer] Launching headless browser...');
   
   // Use @sparticuz/chromium-min on Vercel (recommended by Vercel docs)
-  if (process.env.VERCEL) {
+  if (process.env.VERCEL || process.env.VERCEL_ENV) {
     console.log('[TileRenderer] Using @sparticuz/chromium-min for Vercel');
     
     try {
-      // @sparticuz/chromium-min handles extraction automatically
-      // It will extract to /tmp in Vercel's serverless environment
-      const executablePath = await chromium.executablePath();
+      const chromium = (await import("@sparticuz/chromium-min")).default;
+      const executablePath = await getChromiumPath();
       console.log(`[TileRenderer] Chromium executable path: ${executablePath}`);
       
       browserInstance = await puppeteer.launch({
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-gpu',
-          '--disable-software-rasterizer',
-          '--disable-extensions',
-          '--single-process', // Required for Vercel serverless
-        ],
-        defaultViewport: { width: 1920, height: 1080 },
+        args: chromium.args,
         executablePath: executablePath,
         headless: true,
       });
