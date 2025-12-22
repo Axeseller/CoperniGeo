@@ -421,12 +421,12 @@ export default function Home() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-32 pb-16 sm:pb-32">
         <div className="text-center">
           <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-[#242424] mb-4 sm:mb-6">
-            CoperniGeo es una herramienta diseñada para monitorear y optimizar cultivos.
+            Detecta problemas en tu cultivo antes de que afecten el rendimiento
           </h1>
           <p className="mt-4 sm:mt-6 text-base sm:text-lg md:text-xl text-[#898989] max-w-3xl mx-auto px-2">
             Conoce el sistema para el monitoreo agrícola moderno. Optimiza el seguimiento de áreas, proyectos y análisis de cultivos mediante imágenes satelitales.
           </p>
-          <div className="mt-8 sm:mt-10 flex flex-col sm:flex-row justify-center items-center gap-3 sm:gap-4 sm:space-x-0">
+          <div className="mt-8 sm:mt-10 flex flex-col items-center gap-3 sm:gap-4">
             {!loading && (
               user ? (
                 <Link
@@ -438,17 +438,18 @@ export default function Home() {
               ) : (
                 <>
                   <Link
-                    href="/registrarte"
-                    className="w-full sm:w-auto bg-white text-[#242424] px-6 sm:px-8 py-2.5 sm:py-3 rounded-lg text-base sm:text-lg font-semibold hover:bg-gray-100 transition-colors"
+                    href="/free-report"
+                    className="w-full sm:w-auto bg-[#5db815] text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-lg text-base sm:text-lg font-semibold hover:bg-[#4a9a11] transition-colors text-center flex items-center justify-center gap-2"
                   >
-                    Comenzar Gratis
+                    <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span className="block">Descubre la Salud de tu Cultivo</span>
                   </Link>
-                  <Link
-                    href="/inicia-sesion"
-                    className="w-full sm:w-auto text-[#242424] px-6 sm:px-8 py-2.5 sm:py-3 rounded-lg text-base sm:text-lg font-semibold hover:text-[#5db815] transition-colors"
-                  >
-                    Inicia sesión
-                  </Link>
+                  <p className="text-sm text-[#898989] text-center">
+                    Toma menos de 2 minutos, sin tarjeta de crédito
+                  </p>
                 </>
               )
             )}

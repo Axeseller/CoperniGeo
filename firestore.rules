@@ -41,7 +41,7 @@ service cloud.firestore {
     // Validate report data structure
     function isValidReport() {
       let data = request.resource.data;
-      return data.keys().hasAll(['userId', 'frequency', 'indices', 'cloudCoverage', 'deliveryMethod', 'areaIds'])
+      return data.keys().hasAll(['userId', 'frequency', 'indices', 'cloudCoverage', 'email', 'areaIds'])
         && data.userId is string
         && data.frequency is string
         && data.frequency in ['3days', '5days', 'weekly', 'monthly']
@@ -49,16 +49,9 @@ service cloud.firestore {
         && data.indices.size() > 0
         && data.cloudCoverage is number
         && data.cloudCoverage >= 0 && data.cloudCoverage <= 100
-        && data.deliveryMethod is string
-        && data.deliveryMethod in ['email', 'whatsapp']
-        && data.areaIds is list
-        && (
-          // Email delivery requires email field
-          (data.deliveryMethod == 'email' && data.email is string && data.email.matches('.*@.*\\..*'))
-          ||
-          // WhatsApp delivery requires phoneNumber field
-          (data.deliveryMethod == 'whatsapp' && data.phoneNumber is string && data.phoneNumber.size() >= 10)
-        );
+        && data.email is string
+        && data.email.matches('.*@.*\\..*')
+        && data.areaIds is list;
     }
     
     // ============================================
@@ -161,6 +154,35 @@ service cloud.firestore {
     }
     
     // ============================================
+    // LEADS COLLECTION (No authentication required)
+    // ============================================
+    match /leads/{leadId} {
+      // Anyone can create a lead (for free report conversion flow)
+      // No authentication required
+      allow create: if request.resource.data.keys().hasAll(['email', 'country', 'status', 'createdAt', 'updatedAt'])
+                    && request.resource.data.email is string
+                    && request.resource.data.email.matches('.*@.*\\..*')
+                    && request.resource.data.country is string
+                    && request.resource.data.country.size() > 0
+                    && request.resource.data.status is string
+                    && request.resource.data.status in ['lead', 'snapshot_requested', 'needs_manual_mapping']
+                    && request.resource.data.createdAt is timestamp
+                    && request.resource.data.updatedAt is timestamp;
+      
+      // Allow update for geometry and status (for conversion flow)
+      // Only allow updating specific fields: geometry, status, updatedAt
+      // Email and country cannot be changed
+      allow update: if request.resource.data.email == resource.data.email
+                    && request.resource.data.country == resource.data.country
+                    && request.resource.data.status is string
+                    && request.resource.data.status in ['lead', 'snapshot_requested', 'needs_manual_mapping']
+                    && request.resource.data.updatedAt is timestamp;
+      
+      // No reads or deletes from client (only server can)
+      allow read, delete: if false;
+    }
+    
+    // ============================================
     // DEFAULT DENY (Security by default)
     // ============================================
     // Any collection not explicitly allowed above is denied
@@ -169,4 +191,3 @@ service cloud.firestore {
     }
   }
 }
-

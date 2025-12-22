@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Informe Satelital de Salud del Cultivo</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+      color: #242424;
+      line-height: 1.6;
+      background: #ffffff;
+      padding: 0;
+      margin: 0;
+    }
+    
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 40px 30px;
+      background: #ffffff;
+    }
+    
+    /* Header */
+    .header {
+      margin-bottom: 30px;
+    }
+    
+    .logo {
+      font-size: 32px;
+      font-weight: bold;
+      color: #5db815;
+      margin-bottom: 8px;
+      letter-spacing: -0.5px;
+    }
+    
+    .subtitle {
+      font-size: 16px;
+      color: #898989;
+      font-weight: 400;
+      margin-bottom: 20px;
+    }
+    
+    .divider {
+      height: 1px;
+      background: #e5e5e5;
+      margin: 20px 0;
+    }
+    
+    /* Field Summary */
+    .field-summary {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px 30px;
+      margin-bottom: 40px;
+      padding: 20px 0;
+    }
+    
+    .summary-item {
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .summary-label {
+      font-size: 12px;
+      color: #898989;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+      font-weight: 500;
+    }
+    
+    .summary-value {
+      font-size: 16px;
+      color: #242424;
+      font-weight: 500;
+    }
+    
+    /* Key Insight Section */
+    .key-insight {
+      margin-bottom: 40px;
+      padding: 25px;
+      background: #f8f9fa;
+      border-left: 4px solid #5db815;
+      border-radius: 4px;
+      page-break-inside: avoid;
+    }
+    
+    .key-insight-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #242424;
+      margin-bottom: 16px;
+    }
+    
+    .key-insight-text {
+      font-size: 15px;
+      color: #242424;
+      line-height: 1.7;
+    }
+    
+    /* Main Visual Section */
+    .visual-section {
+      margin-bottom: 40px;
+      page-break-inside: avoid;
+    }
+    
+    .image-placeholder {
+      width: 100%;
+      min-height: 500px;
+      background: #f8f9fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      position: relative;
+      overflow: hidden;
+      page-break-inside: avoid;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .image-placeholder img {
+      width: 100%;
+      height: auto;
+      max-height: 500px;
+      min-height: 300px;
+      object-fit: contain;
+      display: block;
+      position: relative;
+      z-index: 1;
+      background: transparent;
+    }
+    
+    .image-caption {
+      font-size: 14px;
+      color: #898989;
+      text-align: center;
+      margin-bottom: 16px;
+      font-style: italic;
+    }
+    
+    .legend {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 20px;
+      padding: 12px;
+      background: #f8f9fa;
+      border-radius: 4px;
+    }
+    
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .legend-color {
+      width: 24px;
+      height: 16px;
+      border-radius: 2px;
+    }
+    
+    .legend-color.low {
+      background: #ef4444;
+    }
+    
+    .legend-color.medium {
+      background: #fbbf24;
+    }
+    
+    .legend-color.high {
+      background: #5db815;
+    }
+    
+    .legend-label {
+      font-size: 12px;
+      color: #242424;
+    }
+    
+    /* Why This Matters */
+    .why-matters {
+      margin-bottom: 40px;
+      page-break-inside: avoid;
+    }
+    
+    .why-matters-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #242424;
+      margin-bottom: 16px;
+    }
+    
+    .why-matters-text {
+      font-size: 15px;
+      color: #242424;
+      line-height: 1.7;
+    }
+    
+    /* Transition to Monitoring */
+    .transition-box {
+      background: #f0f9ff;
+      border: 2px solid #5db815;
+      border-radius: 8px;
+      padding: 30px;
+      margin-bottom: 40px;
+      text-align: center;
+      page-break-inside: avoid;
+      page-break-before: auto;
+    }
+    
+    .transition-title {
+      font-size: 22px;
+      font-weight: 600;
+      color: #242424;
+      margin-bottom: 16px;
+      line-height: 1.4;
+    }
+    
+    .transition-text {
+      font-size: 15px;
+      color: #242424;
+      line-height: 1.7;
+    }
+    
+    /* Call to Action */
+    .cta-section {
+      margin-bottom: 40px;
+      text-align: center;
+    }
+    
+    .cta-button {
+      display: inline-block;
+      background: #5db815;
+      color: #ffffff;
+      padding: 16px 40px;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: 600;
+      text-decoration: none;
+      margin-bottom: 12px;
+      border: none;
+      cursor: pointer;
+    }
+    
+    .cta-subtext {
+      font-size: 13px;
+      color: #898989;
+      margin-top: 8px;
+    }
+    
+    /* Footer */
+    .footer {
+      margin-top: 60px;
+      padding-top: 30px;
+      border-top: 1px solid #e5e5e5;
+      text-align: center;
+    }
+    
+    .disclaimer {
+      font-size: 12px;
+      color: #898989;
+      margin-bottom: 20px;
+      line-height: 1.6;
+    }
+    
+    .footer-brand {
+      font-size: 14px;
+      color: #5db815;
+      font-weight: 600;
+    }
+    
+    @media print {
+      body {
+        padding: 0;
+      }
+      .container {
+        padding: 30px 20px;
+      }
+      
+      /* Prevent page breaks inside important sections */
+      .key-insight,
+      .transition-box,
+      .visual-section,
+      .why-matters {
+        page-break-inside: avoid;
+      }
+      
+      /* Allow page breaks between major sections */
+      .field-summary {
+        page-break-after: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="logo">CoperniGeo</div>
+      <div class="subtitle">Informe satelital de salud del cultivo</div>
+      <div class="divider"></div>
+    </div>
+    
+    <!-- Field Summary -->
+    <div class="field-summary">
+      <div class="summary-item">
+        <div class="summary-label">Nombre del campo</div>
+        <div class="summary-value">{{fieldName}}</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">Región / País</div>
+        <div class="summary-value">{{region}}</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">Fecha del análisis</div>
+        <div class="summary-value">{{analysisDate}}</div>
+      </div>
+    </div>
+    
+    <!-- Key Insight Section -->
+    <div class="key-insight">
+      <div class="key-insight-title">Resumen del estado del cultivo</div>
+      <div class="key-insight-text">
+        Se ha detectado variabilidad en el vigor del cultivo. No todas las zonas se están desarrollando de manera uniforme. Es importante tener en cuenta que el estrés puede no ser aún visible en campo, pero ya está presente y puede afectar el rendimiento si no se monitorea adecuadamente.
+      </div>
+    </div>
+    
+    <!-- Main Visual Section -->
+    <div class="visual-section">
+      <div class="image-placeholder">
+        <!-- Image will be embedded here as base64 data URI -->
+        <img src="{{ndviImageUrl}}" alt="Mapa de vigor del cultivo" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />
+        <div style="display: none; color: #898989; text-align: center; padding: 40px;">
+          <p style="margin-bottom: 10px;">Imagen satelital no disponible</p>
+          <p style="font-size: 12px;">No se encontraron imágenes satelitales recientes para esta área. Esto puede deberse a cobertura de nubes o falta de imágenes en el período analizado.</p>
+        </div>
+      </div>
+      <div class="image-caption">Mapa de vigor del cultivo — diferencias dentro de la misma parcela</div>
+      <div class="legend">
+        <div class="legend-item">
+          <div class="legend-color low"></div>
+          <span class="legend-label">Bajo vigor</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color medium"></div>
+          <span class="legend-label">Medio vigor</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color high"></div>
+          <span class="legend-label">Alto vigor</span>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Why This Matters -->
+    <div class="why-matters">
+      <div class="why-matters-title">¿Por qué es importante?</div>
+      <div class="why-matters-text">
+        Si estas diferencias no se monitorean durante la temporada de cosecha, a menudo resultan en pérdidas de rendimiento o uso ineficiente de insumos. Identificar y actuar sobre estas variaciones a tiempo puede marcar la diferencia entre una cosecha exitosa y una con resultados por debajo del potencial.
+      </div>
+    </div>
+    
+    <!-- Transition to Monitoring -->
+    <div class="transition-box">
+      <div class="transition-title">Una sola imagen muestra el problema. El seguimiento continuo lo previene.</div>
+      <div class="transition-text">
+        Esta imagen muestra el estado actual de tu cultivo. Sin embargo, el seguimiento continuo semana a semana te permite ver la evolución de estas zonas, identificar tendencias y tomar decisiones informadas antes de que los problemas se agraven.
+      </div>
+    </div>
+    
+    <!-- Call to Action -->
+    <div class="cta-section">
+      <div class="cta-button">Monitorear este campo durante la temporada de cosecha</div>
+      <div class="cta-subtext">Seguimiento semanal · Alertas tempranas · Cancelable en cualquier momento</div>
+    </div>
+    
+    <!-- Footer -->
+    <div class="footer">
+      <div class="disclaimer">
+        Este informe se basa en imágenes satelitales y no reemplaza inspecciones en campo.
+      </div>
+      <div class="footer-brand">CoperniGeo</div>
+    </div>
+  </div>
+</body>
+</html>
+
