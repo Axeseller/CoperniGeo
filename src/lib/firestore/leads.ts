@@ -143,3 +143,33 @@ export async function getLead(leadId: string): Promise<Lead | null> {
   }
 }
 
+/**
+ * Check if a lead with the given email has already completed the CTA flow
+ * Uses API route since Firestore rules don't allow client-side reads
+ * Returns true if a lead exists with coordinates or status 'snapshot_requested'
+ */
+export async function hasCompletedCTA(email: string): Promise<boolean> {
+  try {
+    const response = await fetch('/api/leads/check-email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email }),
+    });
+
+    if (!response.ok) {
+      console.error("[Firestore] ❌ Error checking CTA completion:", response.statusText);
+      // On error, allow them to proceed (fail open)
+      return false;
+    }
+
+    const data = await response.json();
+    return data.hasCompleted === true;
+  } catch (error: any) {
+    console.error("[Firestore] ❌ Error checking CTA completion:", error);
+    // On error, allow them to proceed (fail open)
+    return false;
+  }
+}
+

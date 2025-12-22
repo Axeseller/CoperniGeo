@@ -4,7 +4,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { GoogleMap, useJsApiLoader, DrawingManager, Polygon } from "@react-google-maps/api";
-import { createLead, updateLeadWithGeometry, updateLeadStatus } from "@/lib/firestore/leads";
+import { createLead, updateLeadWithGeometry, updateLeadStatus, hasCompletedCTA } from "@/lib/firestore/leads";
 import { LeadFormData } from "@/types/lead";
 
 const libraries: ("drawing" | "places")[] = ["drawing"];
@@ -28,7 +28,7 @@ const countryCoordinates: Record<string, { lat: number; lng: number; zoom: numbe
   "other": { lat: 20.6597, lng: -103.3496, zoom: 3 },
 };
 
-type Step = "form" | "map" | "confirmation";
+type Step = "form" | "map" | "confirmation" | "already-completed";
 
 export default function FreeReportPage() {
   const [step, setStep] = useState<Step>("form");
@@ -42,6 +42,7 @@ export default function FreeReportPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [map, setMap] = useState<google.maps.Map | null>(null);
+  const [checkingEmail, setCheckingEmail] = useState(false);
   const drawingManagerRef = useRef<google.maps.drawing.DrawingManager | null>(null);
 
   const { isLoaded, loadError } = useJsApiLoader({
@@ -66,7 +67,19 @@ export default function FreeReportPage() {
     }
 
     setIsSubmitting(true);
+    setCheckingEmail(true);
     try {
+      // Check if user has already completed the CTA flow
+      const alreadyCompleted = await hasCompletedCTA(formData.email);
+      
+      if (alreadyCompleted) {
+        setStep("already-completed");
+        setIsSubmitting(false);
+        setCheckingEmail(false);
+        return;
+      }
+
+      // If not completed, proceed with creating lead
       const id = await createLead(formData);
       setLeadId(id);
       setStep("map");
@@ -74,6 +87,7 @@ export default function FreeReportPage() {
       setError(err.message || "Error al guardar tu información. Por favor intenta de nuevo.");
     } finally {
       setIsSubmitting(false);
+      setCheckingEmail(false);
     }
   };
 
@@ -352,10 +366,10 @@ export default function FreeReportPage() {
 
                 <button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || checkingEmail}
                   className="w-full bg-[#5db815] text-white px-6 py-3 rounded-md font-medium hover:bg-[#4a9a11] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isSubmitting ? "Procesando..." : "Continuar"}
+                  {checkingEmail ? "Verificando..." : isSubmitting ? "Procesando..." : "Continuar"}
                 </button>
               </form>
             </div>
@@ -509,6 +523,42 @@ export default function FreeReportPage() {
                   className="border border-[#5db815] text-[#5db815] px-6 py-3 rounded-md font-medium hover:bg-[#5db815] hover:text-white transition-colors"
                 >
                   Crear cuenta gratuita
+                </Link>
+              </div>
+            </div>
+          )}
+
+          {step === "already-completed" && (
+            <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+              <div className="mb-6">
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-[#5db815]/10 rounded-full mb-4">
+                  <svg className="w-8 h-8 text-[#5db815]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h2 className="text-3xl font-bold text-[#121212] mb-4">
+                  Ya has conocido la salud de tu cultivo
+                </h2>
+                <p className="text-lg text-[#898989] mb-6">
+                  Ya has recibido tu reporte satelital gratuito. Para continuar monitoreando tu cultivo y recibir reportes regulares, compra uno de nuestros planes.
+                </p>
+                <p className="text-[#898989] mb-8">
+                  Con CoperniGeo puedes monitorear múltiples campos, recibir alertas tempranas y tomar decisiones informadas para optimizar tu producción.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Link
+                  href="/precios"
+                  className="bg-[#5db815] text-white px-6 py-3 rounded-md font-medium hover:bg-[#4a9a11] transition-colors"
+                >
+                  Ver Planes
+                </Link>
+                <Link
+                  href="/registrarte"
+                  className="border border-[#5db815] text-[#5db815] px-6 py-3 rounded-md font-medium hover:bg-[#5db815] hover:text-white transition-colors"
+                >
+                  Crear cuenta
                 </Link>
               </div>
             </div>
