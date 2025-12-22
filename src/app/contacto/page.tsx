@@ -58,16 +58,16 @@ export default function ContactoPage() {
       if (!response.ok) {
         throw new Error(data.error || 'Error al enviar el mensaje');
       }
-
-      setSubmitMessage("¡Gracias por tu mensaje! Te contactaremos pronto.");
+    
+    setSubmitMessage("¡Gracias por tu mensaje! Te contactaremos pronto.");
       setIsError(false);
-      setFormData({ name: "", email: "", company: "", message: "" });
+    setFormData({ name: "", email: "", company: "", message: "" });
     } catch (error: any) {
       setSubmitMessage(error.message || "Error al enviar el mensaje. Por favor intenta de nuevo.");
       setIsError(true);
     } finally {
-      setIsSubmitting(false);
-      // Clear message after 5 seconds
+    setIsSubmitting(false);
+    // Clear message after 5 seconds
       setTimeout(() => {
         setSubmitMessage("");
         setIsError(false);

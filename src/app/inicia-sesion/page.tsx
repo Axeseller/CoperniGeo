@@ -81,7 +81,7 @@ export default function IniciaSesionPage() {
             : 'bg-[#f4f3f4] border-b border-gray-300'
         }`}>
           <div className="px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center h-16">
+          <div className="flex justify-between items-center h-16">
               <div className="flex items-center space-x-4 md:space-x-8">
                 <Link href="/" className="flex items-center space-x-2">
                   <Image
@@ -92,8 +92,8 @@ export default function IniciaSesionPage() {
                     className="w-8 h-8"
                   />
                   <h1 className="text-xl md:text-2xl font-bold text-[#5db815] cursor-pointer">CoperniGeo</h1>
-                </Link>
-                <div className="hidden md:flex space-x-6">
+              </Link>
+              <div className="hidden md:flex space-x-6">
                   <Link href="/" className="text-[#121212] hover:text-[#5db815] px-3 py-2 rounded-md text-sm font-medium transition-colors">
                     Producto
                   </Link>
@@ -196,20 +196,20 @@ export default function IniciaSesionPage() {
                     </Link>
                   ) : (
                     <>
-                      <Link
-                        href="/inicia-sesion"
+              <Link
+                href="/inicia-sesion"
                         onClick={() => setIsMobileMenuOpen(false)}
                         className="block w-full text-center text-[#121212] hover:text-[#5db815] px-4 py-2 rounded-md text-sm font-medium transition-colors border border-gray-300"
-                      >
-                        Inicia sesión
-                      </Link>
-                      <Link
-                        href="/registrarte"
+              >
+                Inicia sesión
+              </Link>
+              <Link
+                href="/registrarte"
                         onClick={() => setIsMobileMenuOpen(false)}
                         className="block w-full text-center bg-[#5db815] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#4a9a11] transition-colors"
-                      >
-                        Registrarte
-                      </Link>
+              >
+                Registrarte
+              </Link>
                     </>
                   )
                 )}

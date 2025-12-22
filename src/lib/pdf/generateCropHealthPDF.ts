@@ -2,6 +2,82 @@ import puppeteer from "puppeteer-core";
 import fs from "fs";
 import path from "path";
 
+// URL to the Chromium binary package hosted in /public
+// In production, this will be served from your Vercel domain
+// For local dev or if not in production, use a fallback URL
+const CHROMIUM_PACK_URL = process.env.VERCEL_PROJECT_PRODUCTION_URL
+  ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}/chromium-pack.tar`
+  : process.env.VERCEL_URL
+  ? `https://${process.env.VERCEL_URL}/chromium-pack.tar`
+  : "https://github.com/gabenunez/puppeteer-on-vercel/raw/refs/heads/main/example/chromium-dont-use-in-prod.tar";
+
+// Cache the Chromium executable path to avoid re-downloading
+let cachedExecutablePath: string | null = null;
+let downloadPromise: Promise<string> | null = null;
+
+/**
+ * Downloads and caches the Chromium executable path.
+ * Uses a download promise to prevent concurrent downloads.
+ * Only used on Vercel - not in local development.
+ */
+async function getChromiumPath(): Promise<string> {
+  // Return cached path if available
+  if (cachedExecutablePath) return cachedExecutablePath;
+
+  // Prevent concurrent downloads by reusing the same promise
+  if (!downloadPromise) {
+    // Only import chromium-min on Vercel
+    if (!process.env.VERCEL && !process.env.VERCEL_ENV) {
+      throw new Error('getChromiumPath should only be called on Vercel');
+    }
+    
+    // Use require for serverless environments (more reliable than dynamic import)
+    try {
+      const chromiumModule = require('@sparticuz/chromium-min');
+      const chromium = chromiumModule.default || chromiumModule;
+      
+      downloadPromise = chromium
+        .executablePath(CHROMIUM_PACK_URL)
+        .then((path: string) => {
+          cachedExecutablePath = path;
+          console.log('[PDF] Chromium path resolved:', path);
+          return path;
+        })
+        .catch((error: any) => {
+          console.error('[PDF] Failed to get Chromium path:', error);
+          downloadPromise = null; // Reset on error to allow retry
+          throw error;
+        });
+    } catch (requireError: any) {
+      // If require fails, try dynamic import as fallback
+      console.warn('[PDF] Require failed, trying dynamic import:', requireError.message);
+      const moduleName = '@sparticuz/chromium-min';
+      const chromiumModule = await import(moduleName);
+      const chromium = chromiumModule.default || chromiumModule;
+      
+      downloadPromise = chromium
+        .executablePath(CHROMIUM_PACK_URL)
+        .then((path: string) => {
+          cachedExecutablePath = path;
+          console.log('[PDF] Chromium path resolved:', path);
+          return path;
+        })
+        .catch((error: any) => {
+          console.error('[PDF] Failed to get Chromium path:', error);
+          downloadPromise = null; // Reset on error to allow retry
+          throw error;
+        });
+    }
+  }
+
+  // TypeScript assertion: we know downloadPromise is set in the if block above
+  if (!downloadPromise) {
+    throw new Error('Failed to initialize Chromium download promise');
+  }
+
+  return downloadPromise;
+}
+
 /**
  * Get browser instance (similar to tileRenderer pattern)
  */
@@ -11,18 +87,36 @@ async function getBrowserForPDF(): Promise<any> {
   if (isVercel) {
     // Use @sparticuz/chromium-min for Vercel
     try {
-      const chromiumModule = await import("@sparticuz/chromium-min");
+      // Use require for serverless environments (more reliable than dynamic import)
+      const chromiumModule = require('@sparticuz/chromium-min');
       const chromium = chromiumModule.default || chromiumModule;
+      const executablePath = await getChromiumPath();
+      console.log(`[PDF] Chromium executable path: ${executablePath}`);
       
       return await puppeteer.launch({
         args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
+        executablePath: executablePath,
+        headless: true,
       });
-    } catch (error: any) {
-      console.warn("[PDF] Chromium-min failed, trying fallback:", error.message);
-      throw error;
+    } catch (requireError: any) {
+      // If require fails, try dynamic import as fallback
+      try {
+        console.warn("[PDF] Require failed, trying dynamic import:", requireError.message);
+        const moduleName = '@sparticuz/chromium-min';
+        const chromiumModule = await import(moduleName);
+        const chromium = chromiumModule.default || chromiumModule;
+        const executablePath = await getChromiumPath();
+        console.log(`[PDF] Chromium executable path: ${executablePath}`);
+        
+        return await puppeteer.launch({
+          args: chromium.args,
+          executablePath: executablePath,
+          headless: true,
+        });
+      } catch (importError: any) {
+        console.error("[PDF] Both require and import failed:", importError.message);
+        throw new Error(`Failed to load @sparticuz/chromium-min: ${importError.message}`);
+      }
     }
   } else {
     // Use local puppeteer for development
@@ -99,9 +193,9 @@ export async function generateCropHealthPDF(
           Array.from(document.images).map((img) => {
             if (img.complete && img.naturalWidth > 0) {
               console.log(`[PDF] Image already loaded: width=${img.naturalWidth}, height=${img.naturalHeight}`);
-              return Promise.resolve();
+              return Promise.resolve<void>(undefined);
             }
-            return new Promise((resolve, reject) => {
+            return new Promise<void>((resolve, reject) => {
               img.onload = () => {
                 if (img.naturalWidth > 0) {
                   console.log(`[PDF] Image loaded: width=${img.naturalWidth}, height=${img.naturalHeight}`);

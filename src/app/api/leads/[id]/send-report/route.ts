@@ -11,6 +11,7 @@ import {
   getMostRecentImage 
 } from "@/lib/indices/calculations";
 import { IndexType } from "@/types/report";
+import { compositeIndexOverlay } from "@/lib/images/compositeImage";
 import { renderMapWithTiles } from "@/lib/images/tileRenderer";
 import { Lead } from "@/types/lead";
 
@@ -170,7 +171,7 @@ export async function POST(
         const maxValue = statsValue.NDVI_max;
         console.log(`[Lead Report] Statistics: min=${minValue}, max=${maxValue}`);
 
-        // Get tile URL using async callback pattern (same as dashboard)
+        // Get tile URL for headless browser rendering (same as automated reports)
         console.log(`[Lead Report] Generating tile URL...`);
         const mapId = await new Promise<any>((resolve, reject) => {
           const timeout = setTimeout(() => {
@@ -194,7 +195,7 @@ export async function POST(
           );
         });
 
-        // Extract tile URL (same as dashboard)
+        // Extract tile URL (same as automated reports)
         const tileUrl = mapId?.urlFormat || mapId?.tile_fetcher?.url_format || mapId?.url_format;
         
         if (!tileUrl) {
@@ -203,23 +204,141 @@ export async function POST(
         
         console.log(`[Lead Report] Tile URL generated: ${tileUrl.substring(0, 100)}...`);
 
-        // Render map with tiles to get image buffer
-        const imageBuffer = await renderMapWithTiles(
-          lead.coordinates,
-          tileUrl,
-          {
-            width: 1200,
-            height: 1200,
-            polygonColor: "#5db815",
-            indexOpacity: 0.7,
+        // Calculate bounding box with padding for fallback composite
+        let minLat = lead.coordinates[0].lat;
+        let maxLat = lead.coordinates[0].lat;
+        let minLng = lead.coordinates[0].lng;
+        let maxLng = lead.coordinates[0].lng;
+        
+        for (const coord of lead.coordinates) {
+          if (coord.lat < minLat) minLat = coord.lat;
+          if (coord.lat > maxLat) maxLat = coord.lat;
+          if (coord.lng < minLng) minLng = coord.lng;
+          if (coord.lng > maxLng) maxLng = coord.lng;
+        }
+        
+        // Add 5% padding
+        const latPadding = (maxLat - minLat) * 0.05;
+        const lngPadding = (maxLng - minLng) * 0.05;
+        
+        const paddedBounds = ee.Geometry.Polygon([[
+          [minLng - lngPadding, minLat - latPadding],
+          [maxLng + lngPadding, minLat - latPadding],
+          [maxLng + lngPadding, maxLat + latPadding],
+          [minLng - lngPadding, maxLat + latPadding],
+          [minLng - lngPadding, minLat - latPadding]
+        ]]);
+
+        // Try headless browser rendering first (Google Maps + Earth Engine tiles)
+        let finalImageBuffer: Buffer | null = null;
+        
+        try {
+          console.log(`[Lead Report] Rendering map with headless browser (Google Maps + EE tiles)...`);
+          finalImageBuffer = await renderMapWithTiles(
+            lead.coordinates,
+            tileUrl,
+            {
+              width: 1200,
+              height: 1200,
+              polygonColor: '#5db815',
+              indexOpacity: 0.7,
+            }
+          );
+          
+          console.log(`[Lead Report] ✅ Headless browser screenshot captured (${finalImageBuffer.length} bytes)`);
+        } catch (renderError: any) {
+          console.error(`[Lead Report] Headless browser rendering failed: ${renderError.message}`);
+          
+          // Fallback to Earth Engine composite (same as automated reports)
+          console.log(`[Lead Report] Falling back to Earth Engine composite...`);
+          
+          // Generate base satellite image (RGB) and index overlay for composite
+          console.log(`[Lead Report] Generating RGB base satellite image...`);
+          const baseSatelliteUrl = await new Promise<string>((resolve, reject) => {
+            (image as any).getThumbURL({
+              dimensions: 1200,
+              format: 'png',
+              region: paddedBounds,
+              bands: ['B4', 'B3', 'B2'], // RGB bands
+              min: [0, 0, 0],
+              max: [3000, 3000, 3000], // Typical Sentinel-2 reflectance values
+            }, (url: string, error?: Error) => {
+              if (error) reject(error);
+              else resolve(url);
+            });
+          });
+          console.log(`[Lead Report] ✅ RGB base satellite image generated`);
+          
+          console.log(`[Lead Report] Generating NDVI overlay thumbnail...`);
+          const thumbnailUrl = await new Promise<string>((resolve, reject) => {
+            (clipped as any).getThumbURL({
+              dimensions: 1200, // Same dimensions as base image
+              format: 'png',
+              region: paddedBounds, // Same bounding box as base image
+              min: minValue,
+              max: maxValue,
+              palette: ["red", "yellow", "green"],
+            }, (url: string, error?: Error) => {
+              if (error) reject(error);
+              else resolve(url);
+            });
+          });
+          console.log(`[Lead Report] ✅ Index overlay thumbnail generated`);
+
+          // Download both images
+          console.log(`[Lead Report] Downloading base satellite image...`);
+          const baseResponse = await fetch(baseSatelliteUrl, {
+            headers: { 'User-Agent': 'CoperniGeo-Email-Service/1.0' },
+          });
+          
+          if (!baseResponse.ok) {
+            throw new Error(`Failed to download base image: ${baseResponse.status} ${baseResponse.statusText}`);
           }
-        );
+          
+          const baseArrayBuffer = await baseResponse.arrayBuffer();
+          const baseBuffer = Buffer.from(baseArrayBuffer);
+          console.log(`[Lead Report] ✅ Base satellite image downloaded (${baseBuffer.length} bytes)`);
+          
+          console.log(`[Lead Report] Downloading index overlay...`);
+          const overlayResponse = await fetch(thumbnailUrl, {
+            headers: { 'User-Agent': 'CoperniGeo-Email-Service/1.0' },
+          });
+          
+          if (!overlayResponse.ok) {
+            throw new Error(`Failed to download overlay: ${overlayResponse.status} ${overlayResponse.statusText}`);
+          }
+          
+          const overlayArrayBuffer = await overlayResponse.arrayBuffer();
+          const overlayBuffer = Buffer.from(overlayArrayBuffer);
+          console.log(`[Lead Report] ✅ Index overlay downloaded (${overlayBuffer.length} bytes)`);
+
+          // Composite the images (base + overlay + polygon outline)
+          try {
+            finalImageBuffer = await compositeIndexOverlay(
+              baseBuffer,
+              overlayBuffer,
+              lead.coordinates,
+              0.7, // opacity
+              '#5db815' // polygon color
+            );
+            console.log(`[Lead Report] ✅ Earth Engine composite generated (${finalImageBuffer.length} bytes)`);
+          } catch (compositeError: any) {
+            console.error(`[Lead Report] Composite also failed: ${compositeError.message}`);
+            throw new Error(`Both headless browser and composite failed: ${compositeError.message}`);
+          }
+        }
+
+        if (!finalImageBuffer) {
+          throw new Error("Failed to generate image - both headless browser and composite methods failed");
+        }
 
         // Convert to base64 data URI
-        const base64String = imageBuffer.toString('base64');
+        const base64String = finalImageBuffer.toString('base64');
+        
         if (!base64String || base64String.length === 0) {
           throw new Error("Image buffer is empty after conversion to base64");
         }
+        
         ndviImageBase64 = `data:image/png;base64,${base64String}`;
         console.log(`[Lead Report] ✅ NDVI image generated (${base64String.length} chars base64)`);
         console.log(`[Lead Report] Image data URI starts with: ${ndviImageBase64.substring(0, 50)}...`);

@@ -32,24 +32,44 @@ async function getChromiumPath(): Promise<string> {
       throw new Error('getChromiumPath should only be called on Vercel');
     }
     
-    // Use dynamic import with a variable to prevent Next.js from statically analyzing it
-    // This ensures the module is only loaded at runtime on Vercel
-    const moduleName = '@sparticuz/chromium-min';
-    const chromiumModule = await import(moduleName);
-    const chromium = chromiumModule.default || chromiumModule;
-    
-    downloadPromise = chromium
-      .executablePath(CHROMIUM_PACK_URL)
-      .then((path: string) => {
-        cachedExecutablePath = path;
-        console.log('[TileRenderer] Chromium path resolved:', path);
-        return path;
-      })
-      .catch((error: any) => {
-        console.error('[TileRenderer] Failed to get Chromium path:', error);
-        downloadPromise = null; // Reset on error to allow retry
-        throw error;
-      });
+    // Use require for serverless environments (same as PDF generator - works reliably)
+    // Wrap in try-catch to handle cases where require might not work
+    try {
+      const chromiumModule = require('@sparticuz/chromium-min');
+      const chromium = chromiumModule.default || chromiumModule;
+      
+      downloadPromise = chromium
+        .executablePath(CHROMIUM_PACK_URL)
+        .then((path: string) => {
+          cachedExecutablePath = path;
+          console.log('[TileRenderer] Chromium path resolved:', path);
+          return path;
+        })
+        .catch((error: any) => {
+          console.error('[TileRenderer] Failed to get Chromium path:', error);
+          downloadPromise = null; // Reset on error to allow retry
+          throw error;
+        });
+    } catch (requireError: any) {
+      // If require fails, try dynamic import as fallback
+      console.warn('[TileRenderer] Require failed, trying dynamic import:', requireError.message);
+      const moduleName = '@sparticuz/chromium-min';
+      const chromiumModule = await import(moduleName);
+      const chromium = chromiumModule.default || chromiumModule;
+      
+      downloadPromise = chromium
+        .executablePath(CHROMIUM_PACK_URL)
+        .then((path: string) => {
+          cachedExecutablePath = path;
+          console.log('[TileRenderer] Chromium path resolved:', path);
+          return path;
+        })
+        .catch((error: any) => {
+          console.error('[TileRenderer] Failed to get Chromium path:', error);
+          downloadPromise = null; // Reset on error to allow retry
+          throw error;
+        });
+    }
   }
 
   // TypeScript assertion: we know downloadPromise is set in the if block above
@@ -82,10 +102,8 @@ async function getBrowser(): Promise<any> {
     console.log('[TileRenderer] Attempting to use @sparticuz/chromium-min for Vercel');
     
     try {
-      // Use dynamic import with a variable to prevent Next.js from statically analyzing it
-      // This ensures the module is only loaded at runtime on Vercel
-      const moduleName = '@sparticuz/chromium-min';
-      const chromiumModule = await import(moduleName);
+      // Use require for serverless environments (same as PDF generator - works reliably)
+      const chromiumModule = require('@sparticuz/chromium-min');
       const chromium = chromiumModule.default || chromiumModule;
       const executablePath = await getChromiumPath();
       console.log(`[TileRenderer] Chromium executable path: ${executablePath}`);
@@ -98,9 +116,28 @@ async function getBrowser(): Promise<any> {
       
       console.log('[TileRenderer] ✅ Browser launched with Vercel Chromium');
       return browserInstance;
-    } catch (chromiumError: any) {
-      console.warn('[TileRenderer] Vercel Chromium failed, falling back to local Puppeteer:', chromiumError.message);
-      // Fall through to local puppeteer
+    } catch (requireError: any) {
+      // If require fails, try dynamic import as fallback
+      try {
+        console.warn('[TileRenderer] Require failed, trying dynamic import:', requireError.message);
+        const moduleName = '@sparticuz/chromium-min';
+        const chromiumModule = await import(moduleName);
+        const chromium = chromiumModule.default || chromiumModule;
+        const executablePath = await getChromiumPath();
+        console.log(`[TileRenderer] Chromium executable path: ${executablePath}`);
+        
+        browserInstance = await puppeteer.launch({
+          args: chromium.args,
+          executablePath: executablePath,
+          headless: true,
+        });
+        
+        console.log('[TileRenderer] ✅ Browser launched with Vercel Chromium');
+        return browserInstance;
+      } catch (importError: any) {
+        console.warn('[TileRenderer] Both require and import failed, falling back to local Puppeteer:', importError.message);
+        // Fall through to local puppeteer
+      }
     }
   }
   
