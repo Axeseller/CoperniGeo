@@ -108,7 +108,7 @@ export async function createReport(
   report: Omit<Report, "id" | "nextRun" | "createdAt" | "lastGenerated">
 ): Promise<string> {
   try {
-    const nextRun = calculateNextRun(report.frequency);
+  const nextRun = calculateNextRun(report.frequency);
     
     // Normalize phone number if provided (remove all non-digits)
     // This ensures consistent storage format
@@ -126,13 +126,13 @@ export async function createReport(
     if (report.email) {
       normalizedReport.email = report.email;
     }
-    
-    const db = getDb();
-    const reportData = {
+  
+  const db = getDb();
+  const reportData = {
       ...normalizedReport,
-      nextRun: Timestamp.fromDate(nextRun),
-      createdAt: Timestamp.now(),
-    };
+    nextRun: Timestamp.fromDate(nextRun),
+    createdAt: Timestamp.now(),
+  };
     
     console.log("[Firestore] Creating report with data:", {
       userId: reportData.userId,
@@ -146,10 +146,10 @@ export async function createReport(
       hasName: !!reportData.name,
       cloudCoverage: reportData.cloudCoverage,
     });
-    
-    const docRef = await addDoc(collection(db, REPORTS_COLLECTION), reportData);
+  
+  const docRef = await addDoc(collection(db, REPORTS_COLLECTION), reportData);
     console.log("[Firestore] ✅ Report created successfully with ID:", docRef.id);
-    return docRef.id;
+  return docRef.id;
   } catch (error: any) {
     console.error("[Firestore] ❌ Error creating report:", error);
     console.error("[Firestore] Error code:", error.code);

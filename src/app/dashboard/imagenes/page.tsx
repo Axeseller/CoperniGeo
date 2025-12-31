@@ -6,6 +6,7 @@ import { getUserAreas } from "@/lib/firestore/areas";
 import InteractiveMap from "@/components/map/InteractiveMap";
 import MapControls from "@/components/map/MapControls";
 import AreaManager from "@/components/areas/AreaManager";
+import PlanRequired from "@/components/PlanRequired";
 import { Area } from "@/types/area";
 import { IndexType } from "@/types/report";
 import { SatelliteImageResponse } from "@/types/satellite";
@@ -114,8 +115,9 @@ export default function ImagenesPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold text-[#242424]">Imágenes Satelitales</h1>
+    <PlanRequired>
+      <div className="space-y-6">
+        <h1 className="text-3xl font-bold text-[#242424]">Imágenes Satelitales</h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Map and Controls */}
@@ -184,6 +186,7 @@ export default function ImagenesPage() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </PlanRequired>
   );
 }

@@ -273,16 +273,16 @@ export async function fetchGoogleMapsSatelliteWithBounds(
 
   console.log(`[GoogleMaps] URL: ${url.toString().substring(0, 150)}...`);
 
-  const response = await fetch(url.toString());
-  
-  if (!response.ok) {
-    const errorText = await response.text();
+    const response = await fetch(url.toString());
+    
+    if (!response.ok) {
+      const errorText = await response.text();
     throw new Error(`Google Maps API error: ${response.status} - ${errorText.substring(0, 200)}`);
-  }
+    }
 
-  const arrayBuffer = await response.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-  
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    
   console.log(`[GoogleMaps] ✅ Satellite image fetched (${buffer.length} bytes)`);
   
   return {
@@ -412,7 +412,7 @@ export async function compositeIndexOverlay(
     // Calculate bounding box with 5% padding - SAME as Earth Engine generation
     // This is critical for alignment!
     const bounds = calculateBoundingBox(coordinates, 5);
-
+    
     // Generate polygon outline
     const polygonSVG = generatePolygonSVG(
       coordinates,

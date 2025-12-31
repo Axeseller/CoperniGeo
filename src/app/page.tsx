@@ -1185,7 +1185,7 @@ export default function Home() {
                 </li>
                 <li>
                   <Link href="#" className="text-gray-400 hover:text-white transition-colors text-sm">
-                    Twitter
+                    X (Twitter)
                   </Link>
                 </li>
                 <li>

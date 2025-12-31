@@ -4,12 +4,76 @@ import Link from "next/link";
 import Image from "next/image";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
+import { getAuth } from "firebase/auth";
+
+function StripeCheckoutButton() {
+  const { user } = useAuth();
+  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleCheckout = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    
+    // Require authentication before checkout
+    if (!user) {
+      // Redirect to signup page, then create checkout session after signup
+      router.push(`/registrarte?returnUrl=${encodeURIComponent("/precios")}`);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // Get auth token
+      const auth = getAuth();
+      const token = await auth.currentUser?.getIdToken();
+
+      // Get the current origin (for redirect URLs)
+      const origin = window.location.origin;
+
+      // Create checkout session via API
+      const response = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify({ origin }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to create checkout session");
+      }
+
+      // Open checkout in a new tab
+      window.open(data.url, "_blank", "noopener,noreferrer");
+    } catch (error: any) {
+      console.error("Error creating checkout session:", error);
+      alert(error.message || "Error al crear la sesión de pago. Por favor intenta de nuevo.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleCheckout}
+      disabled={isLoading}
+      className="block w-full text-center px-6 py-3 rounded-md text-sm font-medium transition-colors bg-[#5db815] text-white hover:bg-[#4a9a11] disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      {isLoading ? "Cargando..." : "Suscribirse"}
+    </button>
+  );
+}
 
 export default function PreciosPage() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [remainingSpots, setRemainingSpots] = useState<number | null>(null);
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -71,7 +135,7 @@ export default function PreciosPage() {
         : null,
     },
     {
-      name: "Profesional",
+      name: "Avanzado",
       price: "$2,000",
       period: "año",
       description: "Para equipos y proyectos serios",
@@ -85,9 +149,9 @@ export default function PreciosPage() {
         "Soporte prioritario",
         "Exportación de datos",
       ],
-      cta: "Comenzar prueba",
+      cta: "Suscribirse",
       highlighted: true,
-      onClick: () => router.push('/registrarte'),
+      useStripeCheckout: true, // Flag to use Stripe checkout
     },
     {
       name: "Empresarial",
@@ -95,7 +159,7 @@ export default function PreciosPage() {
       period: "",
       description: "Soluciones a medida para tu organización",
       features: [
-        "Todo lo de Profesional",
+        "Todo lo de Avanzado",
         "API dedicada",
         "Integración personalizada",
         "Análisis avanzado con IA",
@@ -147,18 +211,31 @@ export default function PreciosPage() {
                 </div>
               </div>
               <div className="flex items-center space-x-2 md:space-x-4">
-                <Link
-                  href="/inicia-sesion"
-                  className="hidden sm:inline-block text-[#121212] hover:text-[#5db815] px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                >
-                  Inicia sesión
-                </Link>
-                <Link
-                  href="/registrarte"
-                  className="bg-[#5db815] text-white px-3 md:px-4 py-2 rounded-md text-sm font-medium hover:bg-[#4a9a11] transition-colors"
-                >
-                  Registrarte
-                </Link>
+                {!authLoading && (
+                  user ? (
+                    <Link
+                      href="/dashboard"
+                      className="bg-[#5db815] text-white px-3 md:px-4 py-2 rounded-md text-sm font-medium hover:bg-[#4a9a11] transition-colors"
+                    >
+                      Ir a mi cuenta
+                    </Link>
+                  ) : (
+                    <>
+                      <Link
+                        href="/inicia-sesion"
+                        className="hidden sm:inline-block text-[#121212] hover:text-[#5db815] px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                      >
+                        Inicia sesión
+                      </Link>
+                      <Link
+                        href="/registrarte"
+                        className="bg-[#5db815] text-white px-3 md:px-4 py-2 rounded-md text-sm font-medium hover:bg-[#4a9a11] transition-colors"
+                      >
+                        Registrarte
+                      </Link>
+                    </>
+                  )
+                )}
                 <button
                   onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                   className="md:hidden p-2 rounded-md text-[#121212] hover:bg-gray-100 transition-colors"
@@ -213,20 +290,34 @@ export default function PreciosPage() {
                 </Link>
               </div>
               <div className="border-t border-gray-200 p-6 mt-auto space-y-3">
-                <Link
-                  href="/inicia-sesion"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="block w-full text-center text-[#121212] hover:text-[#5db815] px-4 py-2 rounded-md text-sm font-medium transition-colors border border-gray-300"
-                >
-                  Inicia sesión
-                </Link>
-                <Link
-                  href="/registrarte"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="block w-full text-center bg-[#5db815] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#4a9a11] transition-colors"
-                >
-                  Registrarte
-                </Link>
+                {!authLoading && (
+                  user ? (
+                    <Link
+                      href="/dashboard"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="block w-full text-center bg-[#5db815] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#4a9a11] transition-colors"
+                    >
+                      Ir a mi cuenta
+                    </Link>
+                  ) : (
+                    <>
+                      <Link
+                        href="/inicia-sesion"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="block w-full text-center text-[#121212] hover:text-[#5db815] px-4 py-2 rounded-md text-sm font-medium transition-colors border border-gray-300"
+                      >
+                        Inicia sesión
+                      </Link>
+                      <Link
+                        href="/registrarte"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="block w-full text-center bg-[#5db815] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#4a9a11] transition-colors"
+                      >
+                        Registrarte
+                      </Link>
+                    </>
+                  )
+                )}
               </div>
             </div>
           </div>
@@ -299,16 +390,20 @@ export default function PreciosPage() {
                       </li>
                     ))}
                   </ul>
-                  <button
-                    onClick={plan.onClick}
-                    className={`block w-full text-center px-6 py-3 rounded-md text-sm font-medium transition-colors ${
-                      plan.highlighted
-                        ? 'bg-[#5db815] text-white hover:bg-[#4a9a11]'
-                        : 'bg-gray-100 text-[#121212] hover:bg-gray-200'
-                    }`}
-                  >
-                    {plan.cta}
-                  </button>
+                  {plan.useStripeCheckout ? (
+                    <StripeCheckoutButton />
+                  ) : (
+                    <button
+                      onClick={plan.onClick}
+                      className={`block w-full text-center px-6 py-3 rounded-md text-sm font-medium transition-colors ${
+                        plan.highlighted
+                          ? 'bg-[#5db815] text-white hover:bg-[#4a9a11]'
+                          : 'bg-gray-100 text-[#121212] hover:bg-gray-200'
+                      }`}
+                    >
+                      {plan.cta}
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -337,22 +432,6 @@ export default function PreciosPage() {
               </h3>
               <p className="text-gray-600">
                 Aceptamos tarjetas de crédito y débito (Visa, Mastercard, American Express) y transferencias bancarias para planes empresariales.
-              </p>
-            </div>
-            <div className="border-b border-gray-200 pb-6">
-              <h3 className="text-lg font-semibold text-[#121212] mb-2">
-                ¿Ofrecen descuentos por pago anual?
-              </h3>
-              <p className="text-gray-600">
-                Sí, al optar por el pago anual obtienes 2 meses gratis (ahorro del 16%). Contáctanos para más detalles.
-              </p>
-            </div>
-            <div className="pb-6">
-              <h3 className="text-lg font-semibold text-[#121212] mb-2">
-                ¿Hay período de prueba?
-              </h3>
-              <p className="text-gray-600">
-                El plan Profesional incluye 14 días de prueba gratis. No se requiere tarjeta de crédito para empezar.
               </p>
             </div>
           </div>

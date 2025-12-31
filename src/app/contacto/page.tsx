@@ -3,10 +3,12 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState, useEffect } from "react";
+import { useAuth } from "@/context/AuthContext";
 
 export default function ContactoPage() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { user, loading: authLoading } = useAuth();
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -119,18 +121,31 @@ export default function ContactoPage() {
                 </div>
               </div>
               <div className="flex items-center space-x-2 md:space-x-4">
-                <Link
-                  href="/inicia-sesion"
-                  className="hidden sm:inline-block text-[#121212] hover:text-[#5db815] px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                >
-                  Inicia sesión
-                </Link>
-                <Link
-                  href="/registrarte"
-                  className="bg-[#5db815] text-white px-3 md:px-4 py-2 rounded-md text-sm font-medium hover:bg-[#4a9a11] transition-colors"
-                >
-                  Registrarte
-                </Link>
+                {!authLoading && (
+                  user ? (
+                    <Link
+                      href="/dashboard"
+                      className="bg-[#5db815] text-white px-3 md:px-4 py-2 rounded-md text-sm font-medium hover:bg-[#4a9a11] transition-colors"
+                    >
+                      Ir a mi cuenta
+                    </Link>
+                  ) : (
+                    <>
+                      <Link
+                        href="/inicia-sesion"
+                        className="hidden sm:inline-block text-[#121212] hover:text-[#5db815] px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                      >
+                        Inicia sesión
+                      </Link>
+                      <Link
+                        href="/registrarte"
+                        className="bg-[#5db815] text-white px-3 md:px-4 py-2 rounded-md text-sm font-medium hover:bg-[#4a9a11] transition-colors"
+                      >
+                        Registrarte
+                      </Link>
+                    </>
+                  )
+                )}
                 <button
                   onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                   className="md:hidden p-2 rounded-md text-[#121212] hover:bg-gray-100 transition-colors"
@@ -185,20 +200,34 @@ export default function ContactoPage() {
                 </Link>
               </div>
               <div className="border-t border-gray-200 p-6 mt-auto space-y-3">
-                <Link
-                  href="/inicia-sesion"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="block w-full text-center text-[#121212] hover:text-[#5db815] px-4 py-2 rounded-md text-sm font-medium transition-colors border border-gray-300"
-                >
-                  Inicia sesión
-                </Link>
-                <Link
-                  href="/registrarte"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="block w-full text-center bg-[#5db815] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#4a9a11] transition-colors"
-                >
-                  Registrarte
-                </Link>
+                {!authLoading && (
+                  user ? (
+                    <Link
+                      href="/dashboard"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="block w-full text-center bg-[#5db815] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#4a9a11] transition-colors"
+                    >
+                      Ir a mi cuenta
+                    </Link>
+                  ) : (
+                    <>
+                      <Link
+                        href="/inicia-sesion"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="block w-full text-center text-[#121212] hover:text-[#5db815] px-4 py-2 rounded-md text-sm font-medium transition-colors border border-gray-300"
+                      >
+                        Inicia sesión
+                      </Link>
+                      <Link
+                        href="/registrarte"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="block w-full text-center bg-[#5db815] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#4a9a11] transition-colors"
+                      >
+                        Registrarte
+                      </Link>
+                    </>
+                  )
+                )}
               </div>
             </div>
           </div>

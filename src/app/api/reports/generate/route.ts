@@ -1,40 +1,96 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDueReportsAdmin, markReportGeneratedAdmin, getAreaAdmin } from "@/lib/firestore/admin";
+import { getDueReportsAdmin, markReportGeneratedAdmin, getAreaAdmin, updateReportAdmin, getReportAdmin } from "@/lib/firestore/admin";
 import { initializeEarthEngine, getEarthEngine } from "@/lib/earthEngine";
 import { calculateIndex, getSentinel2Collection, getMostRecentImage } from "@/lib/indices/calculations";
 import { sendEmail } from "@/lib/email/resend";
+import { sendReportWhatsAppWithPDF } from "@/lib/whatsapp/meta";
 import { generateReportPDF } from "@/lib/pdf/generateReportPDF";
-import { IndexType, ReportFrequency } from "@/types/report";
+import { IndexType, ReportFrequency, Report } from "@/types/report";
 import { getFrequencyLabel } from "@/lib/utils/reports";
 import { calculatePolygonArea, squareMetersToKm } from "@/lib/utils/geometry";
 import { compositeIndexOverlay } from '@/lib/images/compositeImage';
 import { renderMapWithTiles } from '@/lib/images/tileRenderer';
-import { uploadImageWithDedup } from "@/lib/storage/admin-upload";
+import { uploadImageWithDedup, uploadPDFAdmin } from "@/lib/storage/admin-upload";
 import sharp from 'sharp';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 300; // Maximum 5 minutes (Vercel Pro limit)
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
+  const timestamp = new Date().toISOString();
+  
   try {
+    console.log(`[Report Generate] Starting report generation at ${timestamp}`);
+    
     // Check for authorization (optional: add API key check)
     const authHeader = request.headers.get("authorization");
     // For now, we'll allow calls without auth for cron jobs
     // In production, add proper authentication
 
-    // Get all due reports using Admin SDK (bypasses Firestore rules)
-    const reports = await getDueReportsAdmin();
+    // Check for force parameter (for testing specific reports)
+    const forceReportId = request.nextUrl.searchParams.get('forceReportId');
+    
+    let reports: Report[] = [];
+    
+    if (forceReportId) {
+      // Force processing a specific report (for testing)
+      console.log(`[Report Generate] Force mode: Processing report ${forceReportId} (bypassing nextRun check)`);
+      const report = await getReportAdmin(forceReportId);
+      
+      if (!report) {
+        return NextResponse.json({ 
+          error: `Report ${forceReportId} not found`,
+          timestamp,
+        }, { status: 404 });
+      }
+      
+      if (report.status !== 'active') {
+        return NextResponse.json({ 
+          error: `Report ${forceReportId} is not active (status: ${report.status})`,
+          timestamp,
+        }, { status: 400 });
+      }
+      
+      reports = [report];
+      console.log(`[Report Generate] Force processing report: ${report.id}, deliveryMethod: ${report.deliveryMethod}`);
+    } else {
+      // Get all due reports using Admin SDK (bypasses Firestore rules)
+      console.log(`[Report Generate] Fetching due reports...`);
+      reports = await getDueReportsAdmin();
 
-    if (reports.length === 0) {
-      return NextResponse.json({ message: "No reports due for generation" });
+      if (reports.length === 0) {
+        console.log(`[Report Generate] No reports due for generation`);
+        return NextResponse.json({ 
+          message: "No reports due for generation",
+          timestamp,
+          checkedAt: timestamp,
+        });
+      }
     }
+    
+    console.log(`[Report Generate] Found ${reports.length} report(s) to process`);
 
     // Initialize Earth Engine
     await initializeEarthEngine();
     const ee = getEarthEngine();
 
     const results = [];
+    const TIME_BUDGET_MS = 240000; // 4 minutes (leave 1 minute buffer before 5min timeout)
+    const startProcessingTime = Date.now();
 
-    for (const report of reports) {
+    for (let i = 0; i < reports.length; i++) {
+      const report = reports[i];
+      const elapsed = Date.now() - startProcessingTime;
+      
+      // Check if we're running out of time
+      if (elapsed > TIME_BUDGET_MS) {
+        console.log(`[Report Generate] ⚠️ Time budget exceeded (${elapsed}ms). Processed ${i}/${reports.length} reports. Remaining will be processed in next run.`);
+        break;
+      }
+      
+      console.log(`[Report Generate] Processing report ${i + 1}/${reports.length}: ${report.id} (${elapsed}ms elapsed)`);
+      
       try {
         // Get area coordinates using Admin SDK (bypasses Firestore rules)
         const areas = await Promise.all(
@@ -82,13 +138,13 @@ export async function POST(request: NextRequest) {
             console.log(`[Report Generate] Processing index: ${indexType} for area: ${area.name}`);
             
             try {
-              // Get Sentinel-2 collection (automatically uses last 60 days, most recent data)
-              const collection = getSentinel2Collection(report.cloudCoverage)
-                .filterBounds(polygon); // Filter by polygon early to reduce processing
+            // Get Sentinel-2 collection (automatically uses last 60 days, most recent data)
+            const collection = getSentinel2Collection(report.cloudCoverage)
+              .filterBounds(polygon); // Filter by polygon early to reduce processing
 
-              // Select the most recent image
-              const image = getMostRecentImage(collection);
-              
+            // Select the most recent image
+            const image = getMostRecentImage(collection);
+            
               // OPTIMIZATION: Clip image to polygon bounding box BEFORE index calculation
               // This dramatically reduces processing (99%+ reduction for small areas)
               console.log(`[Report Generate] Clipping image to bounding box (cost optimization)...`);
@@ -101,7 +157,7 @@ export async function POST(request: NextRequest) {
               const indexImage = calculateIndex(clippedImage, indexType);
               
               // Clip to exact polygon for statistics
-              const clipped = indexImage.clip(polygon);
+            const clipped = indexImage.clip(polygon);
 
               // OPTIMIZATION: Adaptive resolution scaling based on area size
               const polygonAreaM2 = calculatePolygonArea(coordinates);
@@ -118,37 +174,71 @@ export async function POST(request: NextRequest) {
 
               // Get statistics with optimized parameters
               console.log(`[Report Generate] Computing statistics for ${indexType} (scale: ${scale}m, area: ${areaKm2.toFixed(2)} km²)...`);
-              const stats = clipped.reduceRegion({
-                reducer: ee.Reducer.minMax().combine({
-                  reducer2: ee.Reducer.mean(),
-                  sharedInputs: true,
-                }),
-                geometry: polygon,
+            const stats = clipped.reduceRegion({
+              reducer: ee.Reducer.minMax().combine({
+                reducer2: ee.Reducer.mean(),
+                sharedInputs: true,
+              }),
+              geometry: polygon,
                 scale: scale, // Adaptive resolution
-                maxPixels: 1e9,
+              maxPixels: 1e9,
                 bestEffort: true, // Use best effort mode to avoid timeouts
                 tileScale: 4, // Increase tile scale for better performance
-              });
+            });
 
-              // Use getInfo() instead of get() for better reliability, with longer timeout
-              const statsValue = await new Promise<any>((resolve, reject) => {
-                stats.get((value: any, error?: Error) => {
-                  if (error) reject(error);
-                  else resolve(value);
-                });
-              });
+              // Use getInfo() instead of get() for better reliability, with timeout
+            const statsValue = await new Promise<any>((resolve, reject) => {
+              const timeout = setTimeout(() => {
+                console.error(`[Report Generate] Statistics computation timed out for ${indexType} (area: ${areaKm2.toFixed(2)} km²)`);
+                reject(new Error(`Statistics computation timeout after 90 seconds. Area size: ${areaKm2.toFixed(2)} km²`));
+              }, 90000); // 90 second timeout (same as send route)
 
-              // Generate tile URL for Earth Engine overlay
-              const mapId = clipped.getMapId({
-                min: statsValue[`${indexType}_min`],
-                max: statsValue[`${indexType}_max`],
-                palette:
-                  indexType === "NDVI" || indexType === "NDRE"
-                    ? ["red", "yellow", "green"]
-                    : ["blue", "cyan", "yellow", "orange", "red"],
+              stats.getInfo((value: any, error?: Error) => {
+                clearTimeout(timeout);
+                if (error) {
+                  console.error(`[Report Generate] Statistics error for ${indexType}:`, error);
+                  reject(error);
+                } else {
+                  console.log(`[Report Generate] ✅ Statistics received for ${indexType}`);
+                  resolve(value);
+                }
               });
+            });
 
-              const tileUrl = mapId.tile_fetcher.url_format;
+              // Generate tile URL for Earth Engine overlay (use callback to avoid filesystem issues)
+              console.log(`[Report Generate] Generating tile URL for ${indexType}...`);
+            const mapId = await Promise.race([
+              new Promise<any>((resolve, reject) => {
+                clipped.getMapId(
+                  {
+                    min: statsValue[`${indexType}_min`],
+                    max: statsValue[`${indexType}_max`],
+                    palette:
+                      indexType === "NDVI" || indexType === "NDRE"
+                        ? ["red", "yellow", "green"]
+                        : ["blue", "cyan", "yellow", "orange", "red"],
+                  },
+                  (result: any, error?: Error) => {
+                    if (error) {
+                      console.error(`[Report Generate] getMapId error for ${indexType}:`, error);
+                      reject(error);
+                    } else {
+                      console.log(`[Report Generate] Tile URL generated for ${indexType}`);
+                      resolve(result);
+                    }
+                  }
+                );
+              }),
+              new Promise((_, reject) => {
+                setTimeout(() => reject(new Error("Tile URL generation timeout after 30 seconds")), 30000);
+              })
+            ]) as any;
+
+              const tileUrl = mapId?.tile_fetcher?.url_format || mapId?.urlFormat || mapId?.url_format || "";
+              if (!tileUrl) {
+                throw new Error(`Failed to extract tile URL from mapId for ${indexType}`);
+              }
+              console.log(`[Report Generate] Extracted tile URL: ${tileUrl.substring(0, 100)}...`);
 
               // Generate base satellite and overlay thumbnails (same as send route)
               let thumbnailUrl: string | null = null;
@@ -232,39 +322,49 @@ export async function POST(request: NextRequest) {
                 console.log(`[Report Generate] Thumbnail generation failed: ${thumbError.message}`);
               }
 
-              // Calculate center coordinates for tile selection
-              const centerLat = coordinates.reduce((sum: number, coord: any) => sum + coord.lat, 0) / coordinates.length;
-              const centerLng = coordinates.reduce((sum: number, coord: any) => sum + coord.lng, 0) / coordinates.length;
+            // Calculate center coordinates for tile selection
+            const centerLat = coordinates.reduce((sum: number, coord: any) => sum + coord.lat, 0) / coordinates.length;
+            const centerLng = coordinates.reduce((sum: number, coord: any) => sum + coord.lng, 0) / coordinates.length;
               console.log(`[Report Generate] Calculated center: lat=${centerLat}, lng=${centerLng}`);
 
-              imageData.push({
-                areaName: area.name,
-                indexType,
+            imageData.push({
+              areaName: area.name,
+              indexType,
                 imageUrl: tileUrl,
                 thumbnailUrl: thumbnailUrl || undefined,
                 baseSatelliteUrl: baseSatelliteUrl || undefined, // Base RGB satellite image
-                stats: {
-                  min: statsValue[`${indexType}_min`],
-                  max: statsValue[`${indexType}_max`],
-                  mean: statsValue[`${indexType}_mean`],
-                },
-                centerLat,
-                centerLng,
+              stats: {
+                min: statsValue[`${indexType}_min`],
+                max: statsValue[`${indexType}_max`],
+                mean: statsValue[`${indexType}_mean`],
+              },
+              centerLat,
+              centerLng,
                 coordinates, // Pass coordinates for composite generation
               });
               console.log(`[Report Generate] Completed ${indexType} for ${area.name}`);
             } catch (indexError: any) {
-              console.error(`[Report Generate] Error processing ${indexType} for ${area.name}:`, indexError);
-              throw new Error(`Failed to process ${indexType} for ${area.name}: ${indexError.message}`);
+              console.error(`[Report Generate] ⚠️ Error processing ${indexType} for ${area.name}:`, indexError);
+              console.error(`[Report Generate] Continuing with next index/area...`);
+              // Don't throw - continue processing other indices/areas
+              // This allows partial success (e.g., if NDVI fails but NDRE succeeds)
             }
           }
         }
 
+        // Check if we have any image data to process
+        if (imageData.length === 0) {
+          console.error(`[Report Generate] ⚠️ No image data generated for report ${report.id} - all indices failed. Skipping report.`);
+          results.push({ reportId: report.id, status: "error", error: "All indices failed to process" });
+          continue;
+        }
+
         // Generate email content using the same high-quality method as send route
-        console.log(`[Report Generate] Generating email HTML with images...`);
+        console.log(`[Report Generate] Generating email HTML with ${imageData.length} image(s)...`);
         const emailResult = await generateReportEmail(report, imageData);
         const emailHtml = emailResult.html;
         const imageBuffers = emailResult.imageBuffers;
+        const uploadedImageUrls = emailResult.imageUrls; // Image URLs already uploaded to Firebase Storage
 
         // Generate PDF using the image buffers from email generation
         console.log(`[Report Generate] Generating PDF for report ${report.id}...`);
@@ -275,10 +375,10 @@ export async function POST(request: NextRequest) {
             : undefined;
           
           return {
-            areaName: data.areaName,
-            indexType: data.indexType,
+          areaName: data.areaName,
+          indexType: data.indexType,
             imageUrl: base64Image ? `data:image/png;base64,${base64Image}` : undefined,
-            stats: data.stats,
+          stats: data.stats,
           };
         });
         
@@ -296,31 +396,89 @@ export async function POST(request: NextRequest) {
           pdfBuffer = null;
         }
 
-        // Send email with PDF attachment (if available)
-        if (!report.email) {
-          throw new Error("Email is required for email delivery");
-        }
-        const emailAddress = report.email; // TypeScript now knows this is string
+        // Send report via email or WhatsApp based on deliveryMethod
         const reportDate = new Date().toLocaleDateString("es-MX");
         
-        const attachments = pdfBuffer ? [{
-          filename: `reporte-copernigeo-${reportDate.replace(/\//g, "-")}.pdf`,
-          content: pdfBuffer,
-          contentType: "application/pdf",
-        }] : undefined;
-        
-        await sendEmail(
-          emailAddress,
-          `Reporte de Monitoreo - ${reportDate}`,
-          emailHtml,
-          undefined,
-          attachments
-        );
-        
-        console.log(`[Report Generate] PDF generated and email sent for report ${report.id}`);
+        if (report.deliveryMethod === "whatsapp") {
+          // Send via WhatsApp with PDF link
+          if (!report.phoneNumber) {
+            throw new Error("Phone number is required for WhatsApp delivery");
+          }
+          
+          console.log(`[Report Generate] Processing WhatsApp report for ${report.phoneNumber}...`);
+          
+          try {
+            // Upload PDF to Firebase Storage
+            let pdfUrl: string | undefined;
+            if (pdfBuffer && pdfBuffer.length > 0) {
+              console.log(`[Report Generate] Uploading PDF to Firebase Storage...`);
+              pdfUrl = await uploadPDFAdmin(report.id!, pdfBuffer);
+              console.log(`[Report Generate] ✅ PDF uploaded: ${pdfUrl}`);
+            } else {
+              console.log(`[Report Generate] ⚠️ No PDF buffer available - skipping PDF upload`);
+            }
 
-        // Mark report as generated using Admin SDK (bypasses Firestore rules)
-        await markReportGeneratedAdmin(report.id!);
+            // Update report with PDF URL and image URLs
+            const updateData: any = {};
+            if (pdfUrl) {
+              updateData.pdfUrl = pdfUrl;
+            }
+            if (uploadedImageUrls && uploadedImageUrls.length > 0) {
+              updateData.imageUrls = uploadedImageUrls;
+            }
+            
+            if (Object.keys(updateData).length > 0) {
+              await updateReportAdmin(report.id!, updateData);
+              console.log(`[Report Generate] ✅ Report updated with URLs`);
+            }
+
+            // Send WhatsApp template with PDF URL
+            const reportName = report.name || `Reporte ${getFrequencyLabel(report.frequency)}`;
+            if (pdfUrl) {
+              await sendReportWhatsAppWithPDF(
+                report.phoneNumber,
+                reportName,
+                pdfUrl
+              );
+              console.log(`[Report Generate] ✅ WhatsApp template sent to ${report.phoneNumber}`);
+            } else {
+              throw new Error("PDF URL is required to send WhatsApp template");
+            }
+
+            // Mark report as generated
+            await markReportGeneratedAdmin(report.id!);
+            
+            console.log(`[Report Generate] ✅ WhatsApp report sent successfully for report ${report.id} to ${report.phoneNumber}`);
+          } catch (whatsappError: any) {
+            console.error(`[Report Generate] ❌ WhatsApp sending failed:`, whatsappError);
+            throw new Error(`Failed to send WhatsApp report: ${whatsappError.message}`);
+          }
+        } else {
+          // Send via email
+          if (!report.email) {
+            throw new Error("Email is required for email delivery");
+          }
+          const emailAddress = report.email;
+          
+          const attachments = pdfBuffer ? [{
+            filename: `reporte-copernigeo-${reportDate.replace(/\//g, "-")}.pdf`,
+            content: pdfBuffer,
+            contentType: "application/pdf",
+          }] : undefined;
+          
+          await sendEmail(
+            emailAddress,
+            `Reporte de Monitoreo - ${reportDate}`,
+            emailHtml,
+            undefined,
+            attachments
+          );
+          
+          console.log(`[Report Generate] PDF generated and email sent for report ${report.id}`);
+
+          // Mark report as generated
+          await markReportGeneratedAdmin(report.id!);
+        }
 
         results.push({ reportId: report.id, status: "success" });
       } catch (error: any) {
@@ -329,11 +487,37 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ results, total: reports.length });
+    const duration = Date.now() - startTime;
+    const processedCount = results.length;
+    const remainingCount = reports.length - processedCount;
+    
+    console.log(`[Report Generate] ✅ Completed processing ${processedCount}/${reports.length} report(s) in ${duration}ms`);
+    
+    if (remainingCount > 0) {
+      console.log(`[Report Generate] ⚠️ ${remainingCount} report(s) remaining - will be processed in next cron run`);
+    }
+    
+    return NextResponse.json({ 
+      results, 
+      total: reports.length,
+      processed: processedCount,
+      remaining: remainingCount,
+      timestamp,
+      duration: `${duration}ms`,
+      message: remainingCount > 0 
+        ? `${processedCount} reports processed, ${remainingCount} will be processed in next run`
+        : `All ${processedCount} reports processed successfully`,
+    });
   } catch (error: any) {
-    console.error("Error in report generation:", error);
+    const duration = Date.now() - startTime;
+    console.error(`[Report Generate] ❌ Error in report generation (${duration}ms):`, error);
+    console.error(`[Report Generate] Error stack:`, error.stack);
     return NextResponse.json(
-      { error: error.message || "Failed to generate reports" },
+      { 
+        error: error.message || "Failed to generate reports",
+        timestamp,
+        duration: `${duration}ms`,
+      },
       { status: 500 }
     );
   }
@@ -371,7 +555,7 @@ async function generateReportEmail(
     centerLng?: number;
     coordinates?: { lat: number; lng: number }[]; // Add coordinates for composite generation
   }>
-): Promise<{ html: string; imageBuffers: Buffer[] }> {
+): Promise<{ html: string; imageBuffers: Buffer[]; imageUrls: Array<{areaName: string; indexType: string; url: string}> }> {
   const reportDate = new Date().toLocaleDateString("es-MX", {
     year: "numeric",
     month: "long",
@@ -380,6 +564,7 @@ async function generateReportEmail(
 
   let imagesHtml = "";
   const imageBuffers: Buffer[] = []; // Store buffers for PDF generation
+  const imageUrls: Array<{areaName: string; indexType: string; url: string}> = []; // Store image URLs for WhatsApp
   
   console.log(`[Report Generate] Starting to process ${imageData.length} images for email...`);
   for (let i = 0; i < imageData.length; i++) {
@@ -417,7 +602,7 @@ async function generateReportEmail(
           headers: { 'User-Agent': 'CoperniGeo-Email-Service/1.0' },
         });
         if (response.ok) {
-          const arrayBuffer = await response.arrayBuffer();
+      const arrayBuffer = await response.arrayBuffer();
           overlayBuffer = Buffer.from(arrayBuffer);
           console.log(`[Report Generate] ✅ Index overlay downloaded (${overlayBuffer.length} bytes)`);
         }
@@ -464,7 +649,7 @@ async function generateReportEmail(
             contentType = 'image/png';
           } catch (compositeError: any) {
             console.error(`[Report Generate] Composite also failed: ${compositeError.message}`);
-          }
+    }
         }
       }
     }
@@ -479,6 +664,13 @@ async function generateReportEmail(
         // Store buffer for PDF generation
         imageBuffers.push(finalImageBuffer);
         
+        // Store image URL for WhatsApp
+        imageUrls.push({
+          areaName: data.areaName,
+          indexType: data.indexType,
+          url: imageUrl,
+        });
+        
         // Get image dimensions to calculate aspect ratio
         const dimensions = await getImageDimensions(finalImageBuffer);
         
@@ -492,17 +684,17 @@ async function generateReportEmail(
         }
         
         const imageTag = `<img src="${imageUrl}" alt="${data.areaName} - ${data.indexType}" style="${imageStyle}" />`;
-        
-        imagesHtml += `
+    
+    imagesHtml += `
       <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom: 20px;">
         <tr>
           <td style="padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: white;">
-            <h3 style="color: #5db815; margin-top: 0;">${data.areaName} - ${data.indexType}</h3>
+        <h3 style="color: #5db815; margin-top: 0;">${data.areaName} - ${data.indexType}</h3>
             <p style="margin-top: 10px; margin-bottom: 15px;"><strong>Valores:</strong> Mín: ${data.stats.min.toFixed(3)}, Máx: ${data.stats.max.toFixed(3)}, Promedio: ${data.stats.mean.toFixed(3)}</p>
             <table cellpadding="0" cellspacing="0" border="0" width="100%" align="center" style="margin: 15px auto;">
               <tr>
                 <td align="center">
-                  ${imageTag}
+        ${imageTag}
                 </td>
               </tr>
             </table>
@@ -615,8 +807,8 @@ async function generateReportEmail(
     </html>
   `;
   
-  console.log(`[Report Generate] Generated email HTML with ${imageBuffers.length} image buffers for PDF generation`);
+  console.log(`[Report Generate] Generated email HTML with ${imageBuffers.length} image buffers and ${imageUrls.length} image URLs for PDF generation`);
   
-  return { html: emailHtml, imageBuffers };
+  return { html: emailHtml, imageBuffers, imageUrls };
 }
 

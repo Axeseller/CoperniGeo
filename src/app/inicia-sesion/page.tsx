@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, FormEvent, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, FormEvent, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/context/AuthContext";
 
-export default function IniciaSesionPage() {
+function IniciaSesionContent() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -15,6 +15,10 @@ export default function IniciaSesionPage() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { login, user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  
+  // Get returnUrl from query params
+  const returnUrl = searchParams?.get("returnUrl");
 
   useEffect(() => {
     const handleScroll = () => {
@@ -49,7 +53,19 @@ export default function IniciaSesionPage() {
     setLoading(true);
     try {
       await login(email, password);
-      router.push("/dashboard");
+      
+      // Use returnUrl from query params (already extracted at top of component)
+      // Redirect to returnUrl if provided, otherwise to dashboard
+      // Use window.location for external URLs (like Stripe checkout), router.push for internal
+      if (returnUrl) {
+        if (returnUrl.startsWith("http://") || returnUrl.startsWith("https://")) {
+          window.location.href = returnUrl;
+        } else {
+          router.push(returnUrl);
+        }
+      } else {
+        router.push("/dashboard");
+      }
     } catch (err: any) {
       let errorMessage = "Error al iniciar sesión. Por favor intenta de nuevo.";
       
@@ -229,7 +245,7 @@ export default function IniciaSesionPage() {
             <p className="mt-2 text-center text-sm text-[#898989]">
             O{" "}
             <Link
-              href="/registrarte"
+              href={returnUrl ? `/registrarte?returnUrl=${encodeURIComponent(returnUrl)}` : "/registrarte"}
                 className="font-medium text-[#5db815] hover:text-[#5db815] transition-colors"
             >
               crea una cuenta nueva
@@ -290,6 +306,21 @@ export default function IniciaSesionPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function IniciaSesionPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#f4f3f4] flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#5db815] mx-auto"></div>
+          <p className="mt-4 text-[#242424]">Cargando...</p>
+        </div>
+      </div>
+    }>
+      <IniciaSesionContent />
+    </Suspense>
   );
 }
 

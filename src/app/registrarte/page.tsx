@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, FormEvent, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, FormEvent, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/context/AuthContext";
 
-export default function RegistrartePage() {
+function RegistrarteContent() {
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -17,6 +17,10 @@ export default function RegistrartePage() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { signup, user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  
+  // Get returnUrl from query params
+  const returnUrl = searchParams?.get("returnUrl");
 
   useEffect(() => {
     const handleScroll = () => {
@@ -75,7 +79,19 @@ export default function RegistrartePage() {
     setLoading(true);
     try {
       await signup(email, password);
-      router.push("/dashboard");
+      
+      // Use returnUrl from query params (already extracted at top of component)
+      // Redirect to returnUrl if provided, otherwise to dashboard
+      // Use window.location for external URLs (like Stripe checkout), router.push for internal
+      if (returnUrl) {
+        if (returnUrl.startsWith("http://") || returnUrl.startsWith("https://")) {
+          window.location.href = returnUrl;
+        } else {
+          router.push(returnUrl);
+        }
+      } else {
+        router.push("/dashboard");
+      }
     } catch (err: any) {
       let errorMessage = "Error al crear la cuenta. Por favor intenta de nuevo.";
       
@@ -141,7 +157,7 @@ export default function RegistrartePage() {
                   ) : (
                     <>
                       <Link
-                        href="/inicia-sesion"
+                        href={returnUrl ? `/inicia-sesion?returnUrl=${encodeURIComponent(returnUrl)}` : "/inicia-sesion"}
                         className="hidden sm:inline-block text-[#121212] hover:text-[#5db815] px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-colors"
                       >
                         Inicia sesión
@@ -221,7 +237,7 @@ export default function RegistrartePage() {
                   ) : (
                     <>
               <Link
-                href="/inicia-sesion"
+                href={returnUrl ? `/inicia-sesion?returnUrl=${encodeURIComponent(returnUrl)}` : "/inicia-sesion"}
                         onClick={() => setIsMobileMenuOpen(false)}
                         className="block w-full text-center text-[#121212] hover:text-[#5db815] px-4 py-2 rounded-md text-sm font-medium transition-colors border border-gray-300"
               >
@@ -253,7 +269,7 @@ export default function RegistrartePage() {
             <p className="mt-2 text-center text-sm text-[#898989]">
             O{" "}
             <Link
-              href="/inicia-sesion"
+              href={returnUrl ? `/inicia-sesion?returnUrl=${encodeURIComponent(returnUrl)}` : "/inicia-sesion"}
                 className="font-medium text-[#5db815] hover:text-[#5db815] transition-colors"
             >
               inicia sesión si ya tienes cuenta
@@ -343,6 +359,21 @@ export default function RegistrartePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function RegistrartePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#f4f3f4] flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#5db815] mx-auto"></div>
+          <p className="mt-4 text-[#242424]">Cargando...</p>
+        </div>
+      </div>
+    }>
+      <RegistrarteContent />
+    </Suspense>
   );
 }
 

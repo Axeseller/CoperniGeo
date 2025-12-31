@@ -1,7 +1,8 @@
 rules_version = '2';
 
 // Firestore Security Rules for CoperniGeo
-// Last updated: 2025-12-12
+// Last updated: 2025-12-22
+// Updated to integrate with Stripe Extension
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -23,6 +24,24 @@ service cloud.firestore {
     // Check if document being created has correct userId
     function hasValidUserId() {
       return request.resource.data.userId == request.auth.uid;
+    }
+    
+    // ============================================
+    // STRIPE PLAN HELPER FUNCTIONS
+    // ============================================
+    // Check if user has avanzado plan (via Stripe custom claim)
+    function hasAvanzadoPlan() {
+      return request.auth != null && request.auth.token.stripeRole == "avanzado";
+    }
+    
+    // Check if user has empresarial plan (via Stripe custom claim)
+    function hasEmpresarialPlan() {
+      return request.auth != null && request.auth.token.stripeRole == "empresarial";
+    }
+    
+    // Check if user has basic plan via Stripe custom claim
+    function hasBasicPlanStripe() {
+      return request.auth != null && request.auth.token.stripeRole == "basic";
     }
     
     // Validate area data structure
@@ -104,10 +123,20 @@ service cloud.firestore {
     // ============================================
     // CACHE COLLECTION
     // ============================================
-    // Satellite imagery cache - shared across users
+    // Satellite imagery cache - restricted to users with active plans
+    // Users without plans cannot access satellite imagery (except during CTA flow, handled server-side)
     match /cache/{cacheId} {
-      // Anyone authenticated can read cache
-      allow read: if isAuthenticated();
+      // Only users with active plans can read cache
+      // Checks: Stripe custom claims (avanzado, empresarial) OR basic plan in userPlans
+      allow read: if isAuthenticated() && (
+        hasAvanzadoPlan() ||
+        hasEmpresarialPlan() ||
+        hasBasicPlanStripe() ||
+        // Check userPlans collection for basic plan (free, no Stripe)
+        (exists(/databases/$(database)/documents/userPlans/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/userPlans/$(request.auth.uid)).data.status == 'active' &&
+         get(/databases/$(database)/documents/userPlans/$(request.auth.uid)).data.planType == 'basic')
+      );
       
       // Only server (via Admin SDK) can write
       // Client writes are blocked
@@ -131,11 +160,12 @@ service cloud.firestore {
     // ============================================
     // USER PLANS COLLECTION
     // ============================================
+    // Legacy userPlans collection (for basic plan that doesn't use Stripe)
     match /userPlans/{planId} {
       // Users can read their own plans
       allow read: if isAuthenticated() && isOwner(resource.data.userId);
       
-      // Users can create their own plan (for basic plan signup)
+      // Users can create their own plan (for basic plan signup - free, no Stripe)
       allow create: if isAuthenticated() 
                     && hasValidUserId()
                     && request.resource.data.keys().hasAll(['userId', 'planType', 'startDate', 'endDate', 'status', 'createdAt', 'updatedAt'])
@@ -151,6 +181,42 @@ service cloud.firestore {
       
       // Users cannot delete plans (only server can)
       allow delete: if false;
+    }
+    
+    // ============================================
+    // STRIPE EXTENSION COLLECTIONS
+    // ============================================
+    // Stripe customer data - users can only access their own
+    match /customers/{uid} {
+      allow read: if isAuthenticated() && request.auth.uid == uid;
+
+      match /checkout_sessions/{id} {
+        allow read, write: if isAuthenticated() && request.auth.uid == uid;
+      }
+      
+      match /subscriptions/{id} {
+        allow read: if isAuthenticated() && request.auth.uid == uid;
+      }
+      
+      match /payments/{id} {
+        allow read: if isAuthenticated() && request.auth.uid == uid;
+      }
+    }
+
+    // Stripe products and prices - public read access
+    match /products/{id} {
+      allow read: if true;
+      allow write: if false; // Only Stripe extension can write
+    }
+
+    match /prices/{id} {
+      allow read: if true;
+      allow write: if false; // Only Stripe extension can write
+    }
+
+    match /tax_rates/{id} {
+      allow read: if true;
+      allow write: if false; // Only Stripe extension can write
     }
     
     // ============================================

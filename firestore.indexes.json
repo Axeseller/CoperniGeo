@@ -22,6 +22,20 @@
         }
       ],
       "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "reports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "nextRun",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

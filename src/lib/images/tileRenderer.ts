@@ -126,7 +126,7 @@ async function getBrowser(): Promise<any> {
         const executablePath = await getChromiumPath();
         console.log(`[TileRenderer] Chromium executable path: ${executablePath}`);
         
-        browserInstance = await puppeteer.launch({
+  browserInstance = await puppeteer.launch({
           args: chromium.args,
           executablePath: executablePath,
           headless: true,
@@ -146,7 +146,7 @@ async function getBrowser(): Promise<any> {
   try {
     const puppeteerLocal = await import('puppeteer');
     browserInstance = await puppeteerLocal.default.launch({
-      headless: true,
+    headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
     console.log('[TileRenderer] ✅ Browser launched with local Puppeteer');
@@ -302,7 +302,7 @@ function generateMapHTML(
     setTimeout(() => {
       if (!window.renderComplete) {
         console.log('Render timeout - completing anyway');
-        window.renderComplete = true;
+      window.renderComplete = true;
       }
     }, 15000);
   </script>

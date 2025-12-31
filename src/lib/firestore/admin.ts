@@ -1,4 +1,4 @@
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { getAdminApp } from '@/lib/firebase-admin';
 import { Area } from '@/types/area';
 import { Report } from '@/types/report';
@@ -142,14 +142,17 @@ function calculateNextRun(frequency: string, lastRun: Date): Date {
 export async function getDueReportsAdmin(): Promise<Report[]> {
   try {
     const db = getAdminFirestore();
-    const now = new Date();
+    // Use Firestore Timestamp instead of JavaScript Date for query comparison
+    const now = Timestamp.now();
+    
+    console.log(`[Admin Firestore] Fetching due reports (nextRun <= ${now.toDate().toISOString()})...`);
     
     const querySnapshot = await db.collection('reports')
       .where('status', '==', 'active')
       .where('nextRun', '<=', now)
       .get();
     
-    return querySnapshot.docs.map((doc) => {
+    const reports = querySnapshot.docs.map((doc) => {
       const data = doc.data();
       return {
         id: doc.id,
@@ -159,6 +162,15 @@ export async function getDueReportsAdmin(): Promise<Report[]> {
         createdAt: data.createdAt?.toDate(),
       } as Report;
     });
+    
+    console.log(`[Admin Firestore] Found ${reports.length} due report(s)`);
+    if (reports.length > 0) {
+      reports.forEach((report) => {
+        console.log(`[Admin Firestore] - Report ${report.id}: nextRun=${report.nextRun?.toISOString()}, frequency=${report.frequency}`);
+      });
+    }
+    
+    return reports;
   } catch (error: any) {
     console.error(`[Admin Firestore] Error fetching due reports:`, error.message);
     throw error;

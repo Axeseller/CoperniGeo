@@ -24,7 +24,7 @@ export default function DashboardLayout({
       <div className="min-h-screen bg-[#f4f3f4]">
         <div className="flex">
           {/* Sidebar */}
-          <aside className="w-64 bg-white shadow-lg min-h-screen border-r border-gray-200">
+          <aside className="w-64 bg-white shadow-lg min-h-screen border-r border-gray-200 rounded-r-2xl overflow-hidden">
             <div className="p-6">
               <Link href="/" className="flex items-center space-x-2 mb-8">
                 <Image

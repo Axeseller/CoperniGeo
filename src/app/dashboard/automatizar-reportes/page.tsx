@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { getUserReports } from "@/lib/firestore/reports";
 import ReportConfig from "@/components/reports/ReportConfig";
 import ReportList from "@/components/reports/ReportList";
+import PlanRequired from "@/components/PlanRequired";
 import { Report } from "@/types/report";
 
 export default function AutomatizarReportesPage() {
@@ -60,7 +61,8 @@ export default function AutomatizarReportesPage() {
   }
 
   return (
-    <div className="max-w-4xl space-y-6">
+    <PlanRequired>
+      <div className="max-w-4xl space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold text-[#242424]">Automatizar Reportes</h1>
         {!showForm && (
@@ -111,6 +113,7 @@ export default function AutomatizarReportesPage() {
           <ReportList reports={reports} onUpdate={loadReports} onEdit={handleEdit} />
         </div>
       )}
-    </div>
+      </div>
+    </PlanRequired>
   );
 }
