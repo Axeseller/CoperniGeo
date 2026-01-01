@@ -3,7 +3,9 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { createLeadFromEmail, hasCompletedCTA } from "@/lib/firestore/leads";
 
 type FeatureType = "satellite" | "analysis" | "reports" | null;
 
@@ -22,9 +24,13 @@ interface Feature {
 
 export default function Home() {
   const { user, loading } = useAuth();
+  const router = useRouter();
   const [selectedFeature, setSelectedFeature] = useState<FeatureType>(null);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
   const carouselRef = useRef<HTMLDivElement>(null);
   const touchStartX = useRef<number>(0);
   const touchStartY = useRef<number>(0);
@@ -286,16 +292,16 @@ export default function Home() {
                     height={32}
                     className="w-8 h-8"
                   />
-                  <h1 className="text-xl md:text-2xl font-bold text-[#5db815] cursor-pointer">CoperniGeo</h1>
+                  <h1 className="text-2xl md:text-3xl font-bold text-[#5db815] cursor-pointer">CoperniGeo</h1>
                 </Link>
                 <div className="hidden md:flex space-x-6">
-                  <Link href="/" className="text-[#5db815] px-3 py-2 rounded-md text-sm font-medium">
+                  <Link href="/" className="text-[#5db815] px-3 py-2 rounded-md text-[1.15rem] font-medium">
                 Producto
                   </Link>
-                  <Link href="/precios" className="text-[#121212] hover:text-[#5db815] px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                  <Link href="/precios" className="text-[#121212] hover:text-[#5db815] px-3 py-2 rounded-md text-[1.15rem] font-medium transition-colors">
                 Precios
                   </Link>
-                  <Link href="/contacto" className="text-[#121212] hover:text-[#5db815] px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                  <Link href="/contacto" className="text-[#121212] hover:text-[#5db815] px-3 py-2 rounded-md text-[1.15rem] font-medium transition-colors">
                 Contacto
                   </Link>
                 </div>
@@ -305,7 +311,7 @@ export default function Home() {
                   user ? (
                     <Link
                       href="/dashboard"
-                      className="bg-[#5db815] text-white px-3 md:px-4 py-2 rounded-md text-sm font-medium hover:bg-[#4a9a11] transition-colors"
+                      className="bg-[#5db815] text-white px-3 md:px-4 py-2 rounded-md text-[1.15rem] font-medium hover:bg-[#4a9a11] transition-colors"
                     >
                       Ir a mi cuenta
                     </Link>
@@ -313,13 +319,13 @@ export default function Home() {
                     <>
                       <Link
                         href="/inicia-sesion"
-                        className="hidden sm:inline-block text-[#121212] hover:text-[#5db815] px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                        className="hidden sm:inline-block text-[#121212] hover:text-[#5db815] px-3 md:px-4 py-2 rounded-md text-[1.15rem] font-medium transition-colors"
                       >
                         Inicia sesión
                       </Link>
                       <Link
                         href="/registrarte"
-                        className="bg-[#5db815] text-white px-3 md:px-4 py-2 rounded-md text-sm font-medium hover:bg-[#4a9a11] transition-colors"
+                        className="bg-[#5db815] text-white px-3 md:px-4 py-2 rounded-md text-[1.15rem] font-medium hover:bg-[#4a9a11] transition-colors"
                       >
                         Registrarte
                       </Link>
@@ -363,21 +369,21 @@ export default function Home() {
                 <Link
                   href="/"
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className="block text-[#5db815] py-2 text-base font-medium"
+                  className="block text-[#5db815] py-2 text-[1.15rem] font-medium"
                 >
                   Producto
                 </Link>
                 <Link
                   href="/precios"
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className="block text-[#121212] hover:text-[#5db815] py-2 text-base font-medium transition-colors"
+                  className="block text-[#121212] hover:text-[#5db815] py-2 text-[1.15rem] font-medium transition-colors"
                 >
                   Precios
                 </Link>
                 <Link
                   href="/contacto"
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className="block text-[#121212] hover:text-[#5db815] py-2 text-base font-medium transition-colors"
+                  className="block text-[#121212] hover:text-[#5db815] py-2 text-[1.15rem] font-medium transition-colors"
                 >
                   Contacto
                 </Link>
@@ -388,7 +394,7 @@ export default function Home() {
                     <Link
                       href="/dashboard"
                       onClick={() => setIsMobileMenuOpen(false)}
-                      className="block w-full text-center bg-[#5db815] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#4a9a11] transition-colors"
+                      className="block w-full text-center bg-[#5db815] text-white px-4 py-2 rounded-md text-[1.15rem] font-medium hover:bg-[#4a9a11] transition-colors"
                     >
                       Ir a mi cuenta
                     </Link>
@@ -397,14 +403,14 @@ export default function Home() {
                       <Link
                         href="/inicia-sesion"
                         onClick={() => setIsMobileMenuOpen(false)}
-                        className="block w-full text-center text-[#121212] hover:text-[#5db815] px-4 py-2 rounded-md text-sm font-medium transition-colors border border-gray-300"
+                        className="block w-full text-center text-[#121212] hover:text-[#5db815] px-4 py-2 rounded-md text-[1.15rem] font-medium transition-colors border border-gray-300"
                       >
                         Inicia sesión
                       </Link>
                       <Link
                         href="/registrarte"
                         onClick={() => setIsMobileMenuOpen(false)}
-                        className="block w-full text-center bg-[#5db815] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#4a9a11] transition-colors"
+                        className="block w-full text-center bg-[#5db815] text-white px-4 py-2 rounded-md text-[1.15rem] font-medium hover:bg-[#4a9a11] transition-colors"
                       >
                         Registrarte
                       </Link>
@@ -421,10 +427,10 @@ export default function Home() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-32 pb-16 sm:pb-32">
         <div className="text-center">
           <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-[#242424] mb-4 sm:mb-6">
-            Detecta problemas en tu cultivo antes de que afecten el rendimiento
+            Entiende la salud de tu cultivo sin complicaciones
           </h1>
           <p className="mt-4 sm:mt-6 text-base sm:text-lg md:text-xl text-[#898989] max-w-3xl mx-auto px-2">
-            Conoce el sistema para el monitoreo agrícola moderno. Optimiza el seguimiento de áreas, proyectos y análisis de cultivos mediante imágenes satelitales.
+            Análisis satelital claro y reportes automáticos, sin ser experto.
           </p>
           <div className="mt-8 sm:mt-10 flex flex-col items-center gap-3 sm:gap-4">
             {!loading && (
@@ -437,16 +443,78 @@ export default function Home() {
                 </Link>
               ) : (
                 <>
-                  <Link
-                    href="/free-report"
-                    className="w-full sm:w-auto bg-[#5db815] text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-lg text-base sm:text-lg font-semibold hover:bg-[#4a9a11] transition-colors text-center flex items-center justify-center gap-2"
-                  >
-                    <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    <span className="block">Descubre la Salud de tu Cultivo</span>
-                  </Link>
+                  <div className="w-full sm:w-auto sm:min-w-[450px] max-w-[500px] bg-white rounded-[20px] p-6 sm:p-10 shadow-[0_10px_40px_rgba(0,0,0,0.12)]">
+                    <h2 className="text-lg sm:text-2xl font-semibold text-[#1a1a1a] mb-5 text-center sm:text-left sm:whitespace-nowrap">
+                      Descubre la salud de tu cultivo
+                    </h2>
+                    {error && (
+                      <div className="mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2">
+                        {error}
+                      </div>
+                    )}
+                    <form
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        setError("");
+                        
+                        if (!email.trim()) {
+                          setError("Por favor ingresa tu correo electrónico");
+                          return;
+                        }
+                        
+                        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                        if (!emailRegex.test(email.trim())) {
+                          setError("Por favor ingresa un correo electrónico válido");
+                          return;
+                        }
+                        
+                        setIsSubmitting(true);
+                        try {
+                          // Check if user has already completed the CTA flow
+                          const alreadyCompleted = await hasCompletedCTA(email.trim());
+                          
+                          if (alreadyCompleted) {
+                            setError("Ya has completado este proceso. Revisa tu correo electrónico.");
+                            setIsSubmitting(false);
+                            return;
+                          }
+                          
+                          // Save email to Firestore
+                          await createLeadFromEmail(email.trim());
+                          
+                          // Redirect to free-report page with email as query param
+                          router.push(`/free-report?email=${encodeURIComponent(email.trim())}`);
+                        } catch (err: any) {
+                          console.error("Error submitting email:", err);
+                          setError(err.message || "Error al guardar tu información. Por favor intenta de nuevo.");
+                          setIsSubmitting(false);
+                        }
+                      }}
+                      className="relative"
+                    >
+                      <div className="flex items-center relative">
+                        <input
+                          type="email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="Escribe tu correo electrónico"
+                          disabled={isSubmitting}
+                          className="flex-1 w-full px-5 py-4 pr-14 sm:pr-16 border-none bg-[#f5f5f5] rounded-xl text-base text-[#666] outline-none transition-colors focus:bg-[#ebebeb] placeholder:text-[#999] disabled:opacity-50"
+                          required
+                        />
+                        <button
+                          type="submit"
+                          disabled={isSubmitting || !email.trim()}
+                          className="absolute right-2 w-10 h-10 border-none rounded-full bg-[#5db815] text-white cursor-pointer flex items-center justify-center transition-transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                          aria-label="Enviar"
+                        >
+                          <svg className="w-5 h-5 fill-white" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/>
+                          </svg>
+                        </button>
+                      </div>
+                    </form>
+                  </div>
                   <p className="text-sm text-[#898989] text-center">
                     Toma menos de 2 minutos, sin tarjeta de crédito
                   </p>

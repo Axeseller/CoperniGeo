@@ -43,6 +43,32 @@ export async function createLead(
 }
 
 /**
+ * Create a lead with just email (uses default country "other")
+ * Used for initial CTA on homepage
+ */
+export async function createLeadFromEmail(email: string): Promise<string> {
+  try {
+    const db = getDb();
+    const now = Timestamp.now();
+    
+    const leadDoc = {
+      email: email.toLowerCase().trim(),
+      country: "other", // Default country, can be updated later
+      status: 'lead' as LeadStatus,
+      createdAt: now,
+      updatedAt: now,
+    };
+    
+    const docRef = await addDoc(collection(db, LEADS_COLLECTION), leadDoc);
+    console.log("[Firestore] ✅ Lead created from email successfully with ID:", docRef.id);
+    return docRef.id;
+  } catch (error: any) {
+    console.error("[Firestore] ❌ Error creating lead from email:", error);
+    throw error;
+  }
+}
+
+/**
  * Update a lead with geometry and status
  * Converts GeoJSON to Firestore-compatible format (flat array of {lat, lng} objects)
  */

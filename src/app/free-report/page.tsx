@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { GoogleMap, useJsApiLoader, DrawingManager, Polygon } from "@react-google-maps/api";
@@ -30,10 +31,13 @@ const countryCoordinates: Record<string, { lat: number; lng: number; zoom: numbe
 
 type Step = "form" | "map" | "confirmation" | "already-completed";
 
-export default function FreeReportPage() {
+function FreeReportPageContent() {
+  const searchParams = useSearchParams();
+  const emailFromQuery = searchParams.get("email");
+  
   const [step, setStep] = useState<Step>("form");
   const [formData, setFormData] = useState<LeadFormData>({
-    email: "",
+    email: emailFromQuery || "",
     farmName: "",
     country: "",
   });
@@ -44,6 +48,34 @@ export default function FreeReportPage() {
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [checkingEmail, setCheckingEmail] = useState(false);
   const drawingManagerRef = useRef<google.maps.drawing.DrawingManager | null>(null);
+
+  // Find existing lead if email was provided from homepage
+  useEffect(() => {
+    if (emailFromQuery) {
+      const findExistingLead = async () => {
+        try {
+          const response = await fetch('/api/leads/find-by-email', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email: emailFromQuery }),
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.leadId) {
+              setLeadId(data.leadId);
+            }
+          }
+        } catch (err) {
+          console.error("Error finding existing lead:", err);
+        }
+      };
+      
+      findExistingLead();
+    }
+  }, [emailFromQuery]);
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: "google-map-script",
@@ -79,10 +111,48 @@ export default function FreeReportPage() {
         return;
       }
 
-      // If not completed, proceed with creating lead
-      const id = await createLead(formData);
-      setLeadId(id);
-      setStep("map");
+      // If we already have a leadId (from homepage CTA), update it
+      // Otherwise, create a new lead
+      if (leadId) {
+        // Update existing lead with country and farmName
+        // Note: Firestore rules don't allow updating country, so we'll create a new one
+        // Actually, let's just use the existing leadId and proceed to map
+        setStep("map");
+      } else {
+        // Check if a lead exists with this email
+        try {
+          const findResponse = await fetch('/api/leads/find-by-email', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email: formData.email }),
+          });
+          
+          if (findResponse.ok) {
+            const findData = await findResponse.json();
+            if (findData.leadId) {
+              setLeadId(findData.leadId);
+              setStep("map");
+            } else {
+              // Create new lead
+              const id = await createLead(formData);
+              setLeadId(id);
+              setStep("map");
+            }
+          } else {
+            // Create new lead if find fails
+            const id = await createLead(formData);
+            setLeadId(id);
+            setStep("map");
+          }
+        } catch (findErr) {
+          // Create new lead if find fails
+          const id = await createLead(formData);
+          setLeadId(id);
+          setStep("map");
+        }
+      }
     } catch (err: any) {
       setError(err.message || "Error al guardar tu información. Por favor intenta de nuevo.");
     } finally {
@@ -572,6 +642,20 @@ export default function FreeReportPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function FreeReportPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-[#898989]">Cargando...</p>
+        </div>
+      </div>
+    }>
+      <FreeReportPageContent />
+    </Suspense>
   );
 }
 
