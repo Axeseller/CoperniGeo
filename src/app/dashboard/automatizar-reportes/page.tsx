@@ -54,7 +54,7 @@ export default function AutomatizarReportesPage() {
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-[#242424]">Automatizar reportes</h1>
         <Card>
-          <div className="text-center py-8 text-[#898989]">Cargando reportes...</div>
+        <div className="text-center py-8 text-[#898989]">Cargando reportes...</div>
         </Card>
       </div>
     );
@@ -63,7 +63,7 @@ export default function AutomatizarReportesPage() {
   return (
     <PlanRequired>
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold text-[#242424] mb-2">Automatizar reportes</h1>
             <p className="text-[#898989]">
@@ -71,50 +71,50 @@ export default function AutomatizarReportesPage() {
             </p>
           </div>
           {!showStepper && (
-            <button
-              onClick={() => {
+          <button
+            onClick={() => {
                 setShowStepper(true);
-                setEditingReport(null);
-              }}
+              setEditingReport(null);
+            }}
               className="bg-[#5db815] text-white px-6 py-3 rounded-lg font-medium hover:bg-[#4a9a11] transition-colors"
-            >
+          >
               Nuevo reporte
-            </button>
-          )}
-        </div>
+          </button>
+        )}
+      </div>
 
         {showStepper ? (
           <div className="relative">
             {editingReport && (
-              <button
+            <button
                 onClick={handleCloseStepper}
                 className="absolute -top-2 right-0 text-[#898989] hover:text-[#242424] transition-colors"
+            >
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
               >
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
             )}
             <ReportStepper onSave={handleSave} initialData={editingReport || undefined} />
-          </div>
-        ) : (
+        </div>
+      ) : (
           <Card>
             <div className="space-y-4">
               <h2 className="text-lg font-semibold text-[#242424]">Reportes configurados</h2>
-              <ReportList reports={reports} onUpdate={loadReports} onEdit={handleEdit} />
-            </div>
+          <ReportList reports={reports} onUpdate={loadReports} onEdit={handleEdit} />
+        </div>
           </Card>
-        )}
+      )}
       </div>
     </PlanRequired>
   );

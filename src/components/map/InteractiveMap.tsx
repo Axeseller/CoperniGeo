@@ -199,26 +199,26 @@ export default function InteractiveMap({
         }}
       >
         {!disableDrawing && (
-          <DrawingManager
-            onLoad={onDrawingManagerLoad}
-            onPolygonComplete={onPolygonCompleteCallback}
-            options={{
-              drawingControl: true,
-              drawingControlOptions: {
-                position: google.maps.ControlPosition.TOP_CENTER,
-                drawingModes: [google.maps.drawing.OverlayType.POLYGON],
-              },
-              polygonOptions: {
-                fillColor: "#16a34a",
-                fillOpacity: 0.2,
-                strokeWeight: 2,
-                strokeColor: "#16a34a",
-                clickable: false,
-                editable: true,
-                zIndex: 1,
-              },
-            }}
-          />
+        <DrawingManager
+          onLoad={onDrawingManagerLoad}
+          onPolygonComplete={onPolygonCompleteCallback}
+          options={{
+            drawingControl: true,
+            drawingControlOptions: {
+              position: google.maps.ControlPosition.TOP_CENTER,
+              drawingModes: [google.maps.drawing.OverlayType.POLYGON],
+            },
+            polygonOptions: {
+              fillColor: "#16a34a",
+              fillOpacity: 0.2,
+              strokeWeight: 2,
+              strokeColor: "#16a34a",
+              clickable: false,
+              editable: true,
+              zIndex: 1,
+            },
+          }}
+        />
         )}
 
         {/* Render existing areas */}

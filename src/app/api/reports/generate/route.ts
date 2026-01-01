@@ -55,18 +55,18 @@ export async function POST(request: NextRequest) {
       reports = [report];
       console.log(`[Report Generate] Force processing report: ${report.id}, deliveryMethod: ${report.deliveryMethod}`);
     } else {
-      // Get all due reports using Admin SDK (bypasses Firestore rules)
+    // Get all due reports using Admin SDK (bypasses Firestore rules)
       console.log(`[Report Generate] Fetching due reports...`);
       reports = await getDueReportsAdmin();
 
-      if (reports.length === 0) {
+    if (reports.length === 0) {
         console.log(`[Report Generate] No reports due for generation`);
         return NextResponse.json({ 
           message: "No reports due for generation",
           timestamp,
           checkedAt: timestamp,
         });
-      }
+    }
     }
     
     console.log(`[Report Generate] Found ${reports.length} report(s) to process`);
@@ -211,12 +211,12 @@ export async function POST(request: NextRequest) {
               new Promise<any>((resolve, reject) => {
                 clipped.getMapId(
                   {
-                    min: statsValue[`${indexType}_min`],
-                    max: statsValue[`${indexType}_max`],
-                    palette:
-                      indexType === "NDVI" || indexType === "NDRE"
-                        ? ["red", "yellow", "green"]
-                        : ["blue", "cyan", "yellow", "orange", "red"],
+              min: statsValue[`${indexType}_min`],
+              max: statsValue[`${indexType}_max`],
+              palette:
+                indexType === "NDVI" || indexType === "NDRE"
+                  ? ["red", "yellow", "green"]
+                  : ["blue", "cyan", "yellow", "orange", "red"],
                   },
                   (result: any, error?: Error) => {
                     if (error) {
@@ -459,25 +459,25 @@ export async function POST(request: NextRequest) {
             throw new Error("Email is required for email delivery");
           }
           const emailAddress = report.email;
-          
-          const attachments = pdfBuffer ? [{
-            filename: `reporte-copernigeo-${reportDate.replace(/\//g, "-")}.pdf`,
-            content: pdfBuffer,
-            contentType: "application/pdf",
-          }] : undefined;
-          
-          await sendEmail(
-            emailAddress,
-            `Reporte de Monitoreo - ${reportDate}`,
-            emailHtml,
-            undefined,
-            attachments
-          );
-          
-          console.log(`[Report Generate] PDF generated and email sent for report ${report.id}`);
+        
+        const attachments = pdfBuffer ? [{
+          filename: `reporte-copernigeo-${reportDate.replace(/\//g, "-")}.pdf`,
+          content: pdfBuffer,
+          contentType: "application/pdf",
+        }] : undefined;
+        
+        await sendEmail(
+          emailAddress,
+          `Reporte de Monitoreo - ${reportDate}`,
+          emailHtml,
+          undefined,
+          attachments
+        );
+        
+        console.log(`[Report Generate] PDF generated and email sent for report ${report.id}`);
 
           // Mark report as generated
-          await markReportGeneratedAdmin(report.id!);
+        await markReportGeneratedAdmin(report.id!);
         }
 
         results.push({ reportId: report.id, status: "success" });

@@ -201,6 +201,40 @@ export default function ImagenesPage() {
                   Crear parcela
                 </button>
               </div>
+              {showCreateArea && (
+                <Card>
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-semibold text-[#242424]">Crear nueva parcela</h3>
+                    <button
+                      onClick={() => {
+                        setShowCreateArea(false);
+                        setDrawnCoordinates(null);
+                      }}
+                      className="text-[#898989] hover:text-[#242424]"
+                    >
+                      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="mb-4">
+                    <InteractiveMap
+                      onPolygonComplete={handlePolygonComplete}
+                      areas={areas}
+                      selectedAreaId={selectedAreaId || undefined}
+                      imageDataList={[]}
+                    />
+                  </div>
+                  <AreaForm
+                    onSubmit={handleCreateArea}
+                    onCancel={() => {
+                      setShowCreateArea(false);
+                      setDrawnCoordinates(null);
+                    }}
+                    coordinates={drawnCoordinates || undefined}
+                  />
+                </Card>
+              )}
               {areas.length === 0 ? (
                 <Card>
                   <div className="text-center py-8">
@@ -279,40 +313,6 @@ export default function ImagenesPage() {
                     );
                   })}
                 </div>
-              )}
-              {showCreateArea && (
-                <Card>
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-semibold text-[#242424]">Crear nueva parcela</h3>
-                    <button
-                      onClick={() => {
-                        setShowCreateArea(false);
-                        setDrawnCoordinates(null);
-                      }}
-                      className="text-[#898989] hover:text-[#242424]"
-                    >
-                      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                  <div className="mb-4">
-                    <InteractiveMap
-                      onPolygonComplete={handlePolygonComplete}
-                      areas={areas}
-                      selectedAreaId={selectedAreaId || undefined}
-                      imageDataList={[]}
-                    />
-                  </div>
-                  <AreaForm
-                    onSubmit={handleCreateArea}
-                    onCancel={() => {
-                      setShowCreateArea(false);
-                      setDrawnCoordinates(null);
-                    }}
-                    coordinates={drawnCoordinates || undefined}
-                  />
-                </Card>
               )}
             </>
           )}

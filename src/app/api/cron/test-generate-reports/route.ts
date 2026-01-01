@@ -88,19 +88,19 @@ async function handleTestRequest(request: NextRequest) {
     
     try {
       const response = await fetch(generateUrl.toString(), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
         signal: controller.signal,
-      });
+    });
 
       clearTimeout(timeoutId);
 
       const contentType = response.headers.get("content-type") || "";
       const duration = Date.now() - startTime;
 
-      if (!response.ok) {
+    if (!response.ok) {
         let errorData: any;
         if (contentType.includes("application/json")) {
           errorData = await response.json();
@@ -109,18 +109,18 @@ async function handleTestRequest(request: NextRequest) {
           console.error(`[Test Cron] Non-JSON error response:`, text.substring(0, 500));
           errorData = { error: `HTTP ${response.status}`, message: text.substring(0, 200) };
         }
-        return NextResponse.json(
-          { 
-            success: false,
-            error: "Failed to generate reports", 
+      return NextResponse.json(
+        { 
+          success: false,
+          error: "Failed to generate reports", 
             details: errorData,
             message: "Check the logs for more details",
             timestamp,
             duration: `${duration}ms`,
-          },
-          { status: response.status }
-        );
-      }
+        },
+        { status: response.status }
+      );
+    }
 
       // Parse JSON only if content-type is correct
       let data: any;

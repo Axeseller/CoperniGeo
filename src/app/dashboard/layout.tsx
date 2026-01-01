@@ -82,7 +82,7 @@ export default function DashboardLayout({
                 {navItems.map((item) => {
                   const active = isActive(item.href);
                   return (
-                    <Link
+                <Link
                       key={item.href}
                       href={item.href}
                       className={`flex items-center space-x-3 px-4 py-2.5 rounded-md transition-colors ${
@@ -93,7 +93,7 @@ export default function DashboardLayout({
                     >
                       {item.icon}
                       <span>{item.label}</span>
-                    </Link>
+                </Link>
                   );
                 })}
               </nav>

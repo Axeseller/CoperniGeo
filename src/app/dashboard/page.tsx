@@ -12,8 +12,8 @@ export default function DashboardPage() {
       {/* Welcome Card: Short, reassuring, orientation + confidence */}
       <Card>
         <h1 className="text-2xl font-bold text-[#242424] mb-2">
-          Bienvenido a CoperniGeo
-        </h1>
+        Bienvenido a CoperniGeo
+      </h1>
         <p className="text-[#898989]">
           Monitorea tus cultivos con imágenes satelitales. Empieza en 3 pasos simples.
         </p>
@@ -22,7 +22,7 @@ export default function DashboardPage() {
       {/* Subtitle: 3 pasos para empezar */}
       <div className="text-center mb-4">
         <h2 className="text-lg font-medium text-[#242424]">3 pasos para empezar</h2>
-      </div>
+        </div>
 
       {/* 3 Vertical Step Cards: One sentence, one CTA */}
       <div className="space-y-4">

@@ -60,7 +60,7 @@ service cloud.firestore {
     // Validate report data structure
     function isValidReport() {
       let data = request.resource.data;
-      return data.keys().hasAll(['userId', 'frequency', 'indices', 'cloudCoverage', 'email', 'areaIds'])
+      return data.keys().hasAll(['userId', 'frequency', 'indices', 'cloudCoverage', 'deliveryMethod', 'areaIds', 'status'])
         && data.userId is string
         && data.frequency is string
         && data.frequency in ['3days', '5days', 'weekly', 'monthly']
@@ -68,9 +68,19 @@ service cloud.firestore {
         && data.indices.size() > 0
         && data.cloudCoverage is number
         && data.cloudCoverage >= 0 && data.cloudCoverage <= 100
-        && data.email is string
-        && data.email.matches('.*@.*\\..*')
-        && data.areaIds is list;
+        && data.deliveryMethod is string
+        && data.deliveryMethod in ['email', 'whatsapp']
+        && data.status is string
+        && data.status in ['active', 'paused']
+        && data.areaIds is list
+        && data.areaIds.size() > 0
+        && (
+          // If email delivery, email must be present and valid
+          (data.deliveryMethod == 'email' && data.email is string && data.email.matches('.*@.*\\..*'))
+          ||
+          // If WhatsApp delivery, phoneNumber must be present
+          (data.deliveryMethod == 'whatsapp' && data.phoneNumber is string && data.phoneNumber.size() >= 10)
+        );
     }
     
     // ============================================
