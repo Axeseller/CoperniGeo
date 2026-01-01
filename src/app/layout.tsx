@@ -3,6 +3,7 @@ import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
+import Navbar from "@/components/Navbar";
 
 export const metadata: Metadata = {
   title: "CoperniGeo - Monitoreo de Cultivos por Satélite",
@@ -20,7 +21,10 @@ export default function RootLayout({
   return (
     <html lang="es" className="overflow-x-hidden">
       <body className="overflow-x-hidden">
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <Navbar />
+          {children}
+        </AuthProvider>
         <SpeedInsights />
         <Analytics />
       </body>
