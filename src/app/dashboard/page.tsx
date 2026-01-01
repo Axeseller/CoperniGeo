@@ -1,49 +1,55 @@
 "use client";
 
-import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
+import Card from "@/components/ui/Card";
+import StepCard from "@/components/ui/StepCard";
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const router = useRouter();
 
   return (
-    <div className="max-w-4xl">
-      <h1 className="text-3xl font-bold text-[#242424] mb-6">
-        Bienvenido a CoperniGeo
-      </h1>
-      <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-        <p className="text-[#898989] mb-4">
-          Hola {user?.email}, bienvenido a tu panel de control.
+    <div className="space-y-6">
+      {/* Welcome Card: Short, reassuring, orientation + confidence */}
+      <Card>
+        <h1 className="text-2xl font-bold text-[#242424] mb-2">
+          Bienvenido a CoperniGeo
+        </h1>
+        <p className="text-[#898989]">
+          Monitorea tus cultivos con imágenes satelitales. Empieza en 3 pasos simples.
         </p>
-        <p className="text-[#898989] mb-4">
-          Desde aquí podrás acceder a todas las funcionalidades de monitoreo de
-          cultivos por satélite.
-        </p>
-        <div className="mt-6 space-y-4">
-          <h2 className="text-xl font-semibold text-[#242424]">
-            Funcionalidades disponibles:
-          </h2>
-          <ul className="list-disc list-inside space-y-2 text-[#898989]">
-            <li>
-              <strong className="text-[#242424]">Planes:</strong> Gestiona tu suscripción y planes de
-              pago
-            </li>
-            <li>
-              <strong className="text-[#242424]">Cuenta:</strong> Administra tu información personal
-            </li>
-            <li>
-              <strong className="text-[#242424]">Ayuda:</strong> Encuentra respuestas a preguntas
-              frecuentes y recursos
-            </li>
-            <li>
-              <strong className="text-[#242424]">Imágenes:</strong> Visualiza imágenes satelitales de tus
-              campos
-            </li>
-            <li>
-              <strong className="text-[#242424]">Automatizar reportes:</strong> Configura reportes
-              automáticos de NDVI
-            </li>
-          </ul>
-        </div>
+      </Card>
+
+      {/* Subtitle: 3 pasos para empezar */}
+      <div className="text-center mb-4">
+        <h2 className="text-lg font-medium text-[#242424]">3 pasos para empezar</h2>
+      </div>
+
+      {/* 3 Vertical Step Cards: One sentence, one CTA */}
+      <div className="space-y-4">
+        <StepCard
+          title="1. Selecciona tu parcela"
+          description="Dibuja o carga el polígono de tu área de cultivo en el mapa."
+          cta={{
+            label: "Ir a Imágenes",
+            onClick: () => router.push("/dashboard/imagenes"),
+          }}
+        />
+        <StepCard
+          title="2. Analiza su estado"
+          description="Revisa los índices de salud de tus cultivos calculados automáticamente."
+          cta={{
+            label: "Ver análisis",
+            onClick: () => router.push("/dashboard/imagenes"),
+          }}
+        />
+        <StepCard
+          title="3. Automatiza reportes"
+          description="Configura reportes periódicos por email o WhatsApp y recibe actualizaciones automáticas."
+          cta={{
+            label: "Configurar reportes",
+            onClick: () => router.push("/dashboard/automatizar-reportes"),
+          }}
+        />
       </div>
     </div>
   );

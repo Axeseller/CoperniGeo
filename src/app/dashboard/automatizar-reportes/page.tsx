@@ -3,16 +3,17 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { getUserReports } from "@/lib/firestore/reports";
-import ReportConfig from "@/components/reports/ReportConfig";
+import ReportStepper from "@/components/reports/ReportStepper";
 import ReportList from "@/components/reports/ReportList";
 import PlanRequired from "@/components/PlanRequired";
+import Card from "@/components/ui/Card";
 import { Report } from "@/types/report";
 
 export default function AutomatizarReportesPage() {
   const { user } = useAuth();
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
+  const [showStepper, setShowStepper] = useState(false);
   const [editingReport, setEditingReport] = useState<Report | null>(null);
 
   const loadReports = useCallback(async () => {
@@ -33,86 +34,87 @@ export default function AutomatizarReportesPage() {
   }, [loadReports]);
 
   const handleSave = async (reportId?: string) => {
-    // Reload reports to show the newly created/updated report
     await loadReports();
-    // Close the form to show the updated list
-    // The form will show the "send now" button if needed, but we want to show the list
-    setShowForm(false);
+    setShowStepper(false);
     setEditingReport(null);
   };
 
   const handleEdit = (report: Report) => {
     setEditingReport(report);
-    setShowForm(true);
+    setShowStepper(true);
   };
 
-  const handleCloseForm = () => {
-    setShowForm(false);
+  const handleCloseStepper = () => {
+    setShowStepper(false);
     setEditingReport(null);
   };
 
   if (loading) {
     return (
-      <div className="max-w-4xl">
-        <h1 className="text-3xl font-bold text-[#242424] mb-6">Automatizar Reportes</h1>
-        <div className="text-center py-8 text-[#898989]">Cargando reportes...</div>
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold text-[#242424]">Automatizar reportes</h1>
+        <Card>
+          <div className="text-center py-8 text-[#898989]">Cargando reportes...</div>
+        </Card>
       </div>
     );
   }
 
   return (
     <PlanRequired>
-      <div className="max-w-4xl space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-[#242424]">Automatizar Reportes</h1>
-        {!showForm && (
-          <button
-            onClick={() => {
-              setShowForm(true);
-              setEditingReport(null);
-            }}
-            className="bg-[#5db815] text-white px-4 py-2 rounded-lg hover:bg-[#4a9a11] transition-colors"
-          >
-            Nuevo Reporte
-          </button>
-        )}
-      </div>
-
-      {showForm ? (
-        <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200 relative">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold text-[#242424]">
-              {editingReport ? "Editar Reporte" : "Crear Nuevo Reporte"}
-            </h2>
-            <button
-              onClick={handleCloseForm}
-              className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-gray-100"
-              aria-label="Cerrar formulario"
-            >
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold text-[#242424] mb-2">Automatizar reportes</h1>
+            <p className="text-[#898989]">
+              Configura reportes periódicos y recibe actualizaciones automáticas
+            </p>
           </div>
-          <ReportConfig onSave={handleSave} initialData={editingReport || undefined} />
+          {!showStepper && (
+            <button
+              onClick={() => {
+                setShowStepper(true);
+                setEditingReport(null);
+              }}
+              className="bg-[#5db815] text-white px-6 py-3 rounded-lg font-medium hover:bg-[#4a9a11] transition-colors"
+            >
+              Nuevo reporte
+            </button>
+          )}
         </div>
-      ) : (
-        <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-          <h2 className="text-xl font-semibold text-[#242424] mb-4">Reportes Configurados</h2>
-          <ReportList reports={reports} onUpdate={loadReports} onEdit={handleEdit} />
-        </div>
-      )}
+
+        {showStepper ? (
+          <div className="relative">
+            {editingReport && (
+              <button
+                onClick={handleCloseStepper}
+                className="absolute -top-2 right-0 text-[#898989] hover:text-[#242424] transition-colors"
+              >
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            )}
+            <ReportStepper onSave={handleSave} initialData={editingReport || undefined} />
+          </div>
+        ) : (
+          <Card>
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold text-[#242424]">Reportes configurados</h2>
+              <ReportList reports={reports} onUpdate={loadReports} onEdit={handleEdit} />
+            </div>
+          </Card>
+        )}
       </div>
     </PlanRequired>
   );

@@ -23,6 +23,7 @@ interface InteractiveMapProps {
   selectedAreaId?: string;
   onAreaSelect?: (areaId: string) => void;
   imageDataList?: SatelliteImageResponse[];
+  disableDrawing?: boolean;
 }
 
 export default function InteractiveMap({
@@ -31,6 +32,7 @@ export default function InteractiveMap({
   selectedAreaId,
   onAreaSelect,
   imageDataList = [],
+  disableDrawing = false,
 }: InteractiveMapProps) {
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [drawnPolygon, setDrawnPolygon] = useState<{ lat: number; lng: number }[] | null>(null);
@@ -196,26 +198,28 @@ export default function InteractiveMap({
           fullscreenControl: true,
         }}
       >
-        <DrawingManager
-          onLoad={onDrawingManagerLoad}
-          onPolygonComplete={onPolygonCompleteCallback}
-          options={{
-            drawingControl: true,
-            drawingControlOptions: {
-              position: google.maps.ControlPosition.TOP_CENTER,
-              drawingModes: [google.maps.drawing.OverlayType.POLYGON],
-            },
-            polygonOptions: {
-              fillColor: "#16a34a",
-              fillOpacity: 0.2,
-              strokeWeight: 2,
-              strokeColor: "#16a34a",
-              clickable: false,
-              editable: true,
-              zIndex: 1,
-            },
-          }}
-        />
+        {!disableDrawing && (
+          <DrawingManager
+            onLoad={onDrawingManagerLoad}
+            onPolygonComplete={onPolygonCompleteCallback}
+            options={{
+              drawingControl: true,
+              drawingControlOptions: {
+                position: google.maps.ControlPosition.TOP_CENTER,
+                drawingModes: [google.maps.drawing.OverlayType.POLYGON],
+              },
+              polygonOptions: {
+                fillColor: "#16a34a",
+                fillOpacity: 0.2,
+                strokeWeight: 2,
+                strokeColor: "#16a34a",
+                clickable: false,
+                editable: true,
+                zIndex: 1,
+              },
+            }}
+          />
+        )}
 
         {/* Render existing areas */}
         {areas.map((area) => {
