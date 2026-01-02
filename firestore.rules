@@ -230,6 +230,19 @@ service cloud.firestore {
     }
     
     // ============================================
+    // SHORT LINKS COLLECTION
+    // ============================================
+    // Short links for report URLs - public read access for redirects
+    match /shortLinks/{linkId} {
+      // Public read access (anyone can read to get the long URL for redirect)
+      allow read: if true;
+      
+      // Only server (via Admin SDK) can create/update/delete
+      // Client writes are blocked
+      allow write: if false;
+    }
+    
+    // ============================================
     // LEADS COLLECTION (No authentication required)
     // ============================================
     match /leads/{leadId} {

@@ -438,7 +438,8 @@ export async function POST(request: NextRequest) {
               await sendReportWhatsAppWithPDF(
                 report.phoneNumber,
                 reportName,
-                pdfUrl
+                pdfUrl,
+                report.id
               );
               console.log(`[Report Generate] ✅ WhatsApp template sent to ${report.phoneNumber}`);
             } else {

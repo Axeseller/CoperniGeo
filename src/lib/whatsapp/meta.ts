@@ -147,16 +147,33 @@ export async function sendReportWhatsApp(
  * Send report delivery notification via WhatsApp with PDF URL
  * Uses "enviodereporte" template with header and body parameters
  * Header {{1}}: report name
- * Body {{1}}: PDF URL
+ * Body {{1}}: PDF URL (shortened via custom short link service)
  */
 export async function sendReportWhatsAppWithPDF(
   phoneNumber: string,
   reportName: string,
-  pdfUrl: string
+  pdfUrl: string,
+  reportId?: string
 ): Promise<void> {
   console.log(`[WhatsApp] Sending report delivery notification:`);
   console.log(`[WhatsApp]   - Report Name: ${reportName}`);
   console.log(`[WhatsApp]   - PDF URL: ${pdfUrl}`);
+  
+  // Create short link for the PDF URL
+  let shortUrl = pdfUrl;
+  try {
+    const { createShortLink } = await import("@/lib/firestore/short-links");
+    const shortCode = await createShortLink(pdfUrl, reportId);
+    
+    // Build branded short URL
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://copernigeo.com';
+    shortUrl = `${appUrl}/s/${shortCode}`;
+    
+    console.log(`[WhatsApp]   - Short URL: ${shortUrl}`);
+  } catch (error: any) {
+    console.warn(`[WhatsApp] ⚠️ Failed to create short link, using original URL: ${error.message}`);
+    // Continue with original URL if short link creation fails
+  }
 
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
   const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
@@ -196,7 +213,7 @@ export async function sendReportWhatsAppWithPDF(
           parameters: [
             {
               type: "text",
-              text: pdfUrl,
+              text: shortUrl,
             },
           ],
         },
