@@ -259,7 +259,7 @@ export default function ReportConfig({ onSave, initialData }: ReportConfigProps)
           Índices *
         </label>
         <div className="space-y-2">
-          {(["NDVI", "NDRE", "EVI"] as IndexType[]).map((index) => (
+          {(["NDVI", "NDRE", "EVI", "NDWI", "MSAVI", "PSRI"] as IndexType[]).map((index) => (
             <label key={index} className="flex items-center space-x-2 cursor-pointer">
               <input
                 type="checkbox"

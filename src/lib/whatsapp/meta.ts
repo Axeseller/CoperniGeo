@@ -166,7 +166,8 @@ export async function sendReportWhatsAppWithPDF(
     const shortCode = await createShortLink(pdfUrl, reportId);
     
     // Build branded short URL
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://copernigeo.com';
+    // Remove trailing slash from appUrl to avoid double slashes
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://copernigeo.com').replace(/\/$/, '');
     shortUrl = `${appUrl}/s/${shortCode}`;
     
     console.log(`[WhatsApp]   - Short URL: ${shortUrl}`);

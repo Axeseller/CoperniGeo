@@ -36,7 +36,8 @@ export async function POST(request: NextRequest) {
     const shortCode = await createShortLink(longUrl, reportId);
 
     // Build the short URL using the app domain
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://copernigeo.com';
+    // Remove trailing slash from appUrl to avoid double slashes
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://copernigeo.com').replace(/\/$/, '');
     const shortUrl = `${appUrl}/s/${shortCode}`;
 
     return NextResponse.json({

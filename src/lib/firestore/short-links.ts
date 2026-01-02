@@ -100,22 +100,37 @@ export async function createShortLink(
  */
 export async function getShortLinkAndTrack(code: string): Promise<string | null> {
   try {
+    console.log(`[Short Links] Looking up code: ${code}`);
     const db = getAdminFirestore();
     
     // Find the short link by code
+    console.log(`[Short Links] Querying Firestore collection: ${SHORT_LINKS_COLLECTION}`);
     const querySnapshot = await db
       .collection(SHORT_LINKS_COLLECTION)
       .where('code', '==', code)
       .limit(1)
       .get();
     
+    console.log(`[Short Links] Query returned ${querySnapshot.size} document(s)`);
+    
     if (querySnapshot.empty) {
-      console.log(`[Short Links] Code not found: ${code}`);
+      console.log(`[Short Links] ⚠️ Code not found in database: ${code}`);
+      // Debug: Check if any documents exist in the collection
+      const allDocs = await db.collection(SHORT_LINKS_COLLECTION).limit(5).get();
+      console.log(`[Short Links] Debug: Collection has ${allDocs.size} total document(s)`);
+      if (allDocs.size > 0) {
+        allDocs.docs.forEach((doc, idx) => {
+          const data = doc.data();
+          console.log(`[Short Links] Debug doc ${idx + 1}: code=${data.code}, longUrl=${data.longUrl?.substring(0, 50)}...`);
+        });
+      }
       return null;
     }
     
     const doc = querySnapshot.docs[0];
     const data = doc.data() as ShortLink;
+    
+    console.log(`[Short Links] Found document: code=${data.code}, longUrl=${data.longUrl?.substring(0, 50)}...`);
     
     // Increment click count and update last clicked timestamp
     await doc.ref.update({
@@ -126,7 +141,10 @@ export async function getShortLinkAndTrack(code: string): Promise<string | null>
     console.log(`[Short Links] ✅ Redirecting ${code} -> ${data.longUrl} (clicks: ${(data.clicks || 0) + 1})`);
     return data.longUrl;
   } catch (error: any) {
-    console.error(`[Short Links] ❌ Error getting short link:`, error.message);
+    console.error(`[Short Links] ❌ Error getting short link:`);
+    console.error(`[Short Links] Error message: ${error.message}`);
+    console.error(`[Short Links] Error code: ${error.code || 'N/A'}`);
+    console.error(`[Short Links] Error stack: ${error.stack || 'N/A'}`);
     throw error;
   }
 }

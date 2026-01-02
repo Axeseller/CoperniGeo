@@ -176,8 +176,12 @@ export async function POST(
                   min: statsValue[`${indexType}_min`],
                   max: statsValue[`${indexType}_max`],
                   palette:
-                    indexType === "NDVI" || indexType === "NDRE"
+                    indexType === "NDVI" || indexType === "NDRE" || indexType === "MSAVI"
                       ? ["red", "yellow", "green"]
+                      : indexType === "NDWI"
+                      ? ["brown", "yellow", "cyan", "blue"]
+                      : indexType === "PSRI"
+                      ? ["green", "yellow", "orange", "red"]
                       : ["blue", "cyan", "yellow", "orange", "red"],
                 },
                 (result: any, error?: Error) => {
@@ -265,8 +269,12 @@ export async function POST(
                   region: paddedBounds, // Same bounding box as base image
                   min: statsValue[`${indexType}_min`],
                   max: statsValue[`${indexType}_max`],
-                  palette: indexType === "NDVI" || indexType === "NDRE"
+                  palette: indexType === "NDVI" || indexType === "NDRE" || indexType === "MSAVI"
                     ? ["red", "yellow", "green"]
+                    : indexType === "NDWI"
+                    ? ["brown", "yellow", "cyan", "blue"]
+                    : indexType === "PSRI"
+                    ? ["green", "yellow", "orange", "red"]
                     : ["blue", "cyan", "yellow", "orange", "red"],
                 }, (url: string, error?: Error) => {
                   if (error) reject(error);

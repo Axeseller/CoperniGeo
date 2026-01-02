@@ -44,10 +44,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!["NDVI", "NDRE", "EVI"].includes(indexType)) {
+    if (!["NDVI", "NDRE", "EVI", "NDWI", "MSAVI", "PSRI"].includes(indexType)) {
       console.error("[Satellite API] Invalid index type:", indexType);
       return NextResponse.json(
-        { error: "Invalid index type. Must be NDVI, NDRE, or EVI." },
+        { error: "Invalid index type. Must be NDVI, NDRE, EVI, NDWI, MSAVI, or PSRI." },
         { status: 400 }
       );
     }
@@ -231,8 +231,12 @@ export async function POST(request: NextRequest) {
         {
           min: minValue,
           max: maxValue,
-          palette: indexType === "NDVI" || indexType === "NDRE"
-            ? ["red", "yellow", "green"] // Red to green for NDVI/NDRE
+          palette: indexType === "NDVI" || indexType === "NDRE" || indexType === "MSAVI"
+            ? ["red", "yellow", "green"] // Red to green for NDVI/NDRE/MSAVI
+            : indexType === "NDWI"
+            ? ["brown", "yellow", "cyan", "blue"] // Brown to blue for water content
+            : indexType === "PSRI"
+            ? ["green", "yellow", "orange", "red"] // Green to red for senescence
             : ["blue", "cyan", "yellow", "orange", "red"], // Blue to red for EVI
         },
         (result: any, error?: Error) => {

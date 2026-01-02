@@ -155,6 +155,21 @@ export default function ImagenesPage() {
       if (meanValue > 0.2) return "Biomasa y productividad moderadas";
       return "Biomasa y productividad bajas";
     }
+    if (indexType === "NDWI") {
+      if (meanValue > 0.3) return "Contenido de agua adecuado";
+      if (meanValue > 0.0) return "Contenido de agua moderado";
+      return "Estrés hídrico - requiere atención";
+    }
+    if (indexType === "MSAVI") {
+      if (meanValue > 0.5) return "Emergencia y establecimiento buenos";
+      if (meanValue > 0.2) return "Emergencia y establecimiento moderados";
+      return "Emergencia pobre o falla temprana";
+    }
+    if (indexType === "PSRI") {
+      if (meanValue < 0.1) return "Vegetación saludable y joven";
+      if (meanValue < 0.3) return "Senescencia moderada o madurez";
+      return "Senescencia avanzada o estrés severo";
+    }
     return "";
   };
 
@@ -167,6 +182,15 @@ export default function ImagenesPage() {
     }
     if (indexType === "EVI") {
       return "EVI es más sensible a variaciones en áreas con alta biomasa.";
+    }
+    if (indexType === "NDWI") {
+      return "NDWI detecta estrés hídrico e problemas de riego antes que otros índices. Detecta contenido de agua que cae antes del declive de clorofila o biomasa.";
+    }
+    if (indexType === "MSAVI") {
+      return "MSAVI elimina el ruido del suelo y es crítico en etapas tempranas. Detecta problemas de emergencia, densidad de siembra y zonas de compactación.";
+    }
+    if (indexType === "PSRI") {
+      return "PSRI distingue senescencia natural de declive inducido por estrés. Útil para detectar enfermedades, optimizar cosecha y evitar insumos innecesarios.";
     }
     return "";
   };
@@ -441,7 +465,7 @@ export default function ImagenesPage() {
             </button>
             {showIndexPanel && coordinates.length >= 3 && (
               <div className="space-y-2">
-                {(["NDVI", "NDRE", "EVI"] as IndexType[]).map((indexType) => (
+                {(["NDVI", "NDRE", "EVI", "NDWI", "MSAVI", "PSRI"] as IndexType[]).map((indexType) => (
                   <button
                     key={indexType}
                     onClick={() => {
@@ -460,6 +484,9 @@ export default function ImagenesPage() {
                       {indexType === "NDVI" && "Ideal para salud general y cobertura vegetal"}
                       {indexType === "NDRE" && "Mejor para contenido de clorofila y nutrición"}
                       {indexType === "EVI" && "Más sensible en áreas con alta biomasa"}
+                      {indexType === "NDWI" && "Estrés hídrico y problemas de riego"}
+                      {indexType === "MSAVI" && "Emergencia y establecimiento temprano"}
+                      {indexType === "PSRI" && "Senescencia y presión de enfermedades"}
                     </div>
                   </button>
                 ))}

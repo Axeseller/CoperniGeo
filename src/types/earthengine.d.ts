@@ -11,6 +11,7 @@ declare module "@google/earthengine" {
     bitwiseAnd(value: number): Image;
     or(other: Image): Image;
     not(): Image;
+    sqrt(): Image;
     reduceRegion(options: {
       reducer: Reducer;
       geometry: Geometry;
@@ -86,6 +87,7 @@ declare module "@google/earthengine" {
   export const ImageCollection: {
     (id: string): ImageCollection;
   };
+
 
   export const Filter: {
     lt(property: string, value: number): Filter;

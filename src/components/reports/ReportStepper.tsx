@@ -6,6 +6,7 @@ import { getUserAreas } from "@/lib/firestore/areas";
 import { createReport, updateReport } from "@/lib/firestore/reports";
 import { Report, IndexType, ReportFrequency, DeliveryMethod } from "@/types/report";
 import { Area } from "@/types/area";
+import { getFrequencyLabel } from "@/lib/utils/reports";
 import Card from "@/components/ui/Card";
 
 interface ReportStepperProps {
@@ -28,6 +29,7 @@ export default function ReportStepper({ onSave, initialData }: ReportStepperProp
   const [email, setEmail] = useState(initialData?.email || user?.email || "");
   const [phoneNumber, setPhoneNumber] = useState(initialData?.phoneNumber || "");
   const [frequency, setFrequency] = useState<ReportFrequency>(initialData?.frequency || "weekly");
+  const [reportName, setReportName] = useState(initialData?.name || "");
   // Indices: default to NDVI but allow modification
   const [indices, setIndices] = useState<IndexType[]>(initialData?.indices || ["NDVI"]);
 
@@ -76,6 +78,10 @@ export default function ReportStepper({ onSave, initialData }: ReportStepperProp
       setError("");
       setCurrentStep("frequency");
     } else if (currentStep === "frequency") {
+      if (!reportName || reportName.trim().length === 0) {
+        setError("El nombre del reporte es obligatorio");
+        return;
+      }
       setError("");
       setCurrentStep("summary");
     }
@@ -113,7 +119,7 @@ export default function ReportStepper({ onSave, initialData }: ReportStepperProp
           deliveryMethod,
           email: deliveryMethod === "email" ? email : undefined,
           phoneNumber: deliveryMethod === "whatsapp" ? phoneNumber : undefined,
-          name: initialData.name,
+          name: reportName || undefined,
           status: initialData.status,
         });
         reportId = initialData.id;
@@ -126,6 +132,7 @@ export default function ReportStepper({ onSave, initialData }: ReportStepperProp
           deliveryMethod,
           email: deliveryMethod === "email" ? email : undefined,
           phoneNumber: deliveryMethod === "whatsapp" ? phoneNumber : undefined,
+          name: reportName || undefined,
           userId: user.uid,
           status: "active",
         });
@@ -150,15 +157,6 @@ export default function ReportStepper({ onSave, initialData }: ReportStepperProp
     }
   };
 
-  const getFrequencyLabel = (freq: ReportFrequency): string => {
-    const labels: Record<ReportFrequency, string> = {
-      "3days": "Cada 3 días",
-      "5days": "Cada 5 días",
-      weekly: "Semanal",
-      monthly: "Mensual",
-    };
-    return labels[freq];
-  };
 
   return (
     <div className="space-y-6">
@@ -267,7 +265,7 @@ export default function ReportStepper({ onSave, initialData }: ReportStepperProp
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-[#5db815] focus:border-[#5db815]"
+                  className="w-full px-4 py-2 bg-white text-[#242424] border border-gray-300 rounded-lg focus:outline-none focus:ring-[#5db815] focus:border-[#5db815]"
                   placeholder="ejemplo@correo.com"
                   required
                 />
@@ -281,7 +279,7 @@ export default function ReportStepper({ onSave, initialData }: ReportStepperProp
                   type="tel"
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-[#5db815] focus:border-[#5db815]"
+                  className="w-full px-4 py-2 bg-white text-[#242424] border border-gray-300 rounded-lg focus:outline-none focus:ring-[#5db815] focus:border-[#5db815]"
                   placeholder="523318450745"
                   required
                 />
@@ -320,8 +318,21 @@ export default function ReportStepper({ onSave, initialData }: ReportStepperProp
                 Selecciona cada cuánto tiempo quieres recibir reportes
               </p>
             </div>
+            <div>
+              <label className="block text-sm font-medium text-[#242424] mb-2">
+                Nombre del reporte *
+              </label>
+              <input
+                type="text"
+                value={reportName}
+                onChange={(e) => setReportName(e.target.value)}
+                className="w-full px-4 py-2 bg-white text-[#242424] border border-gray-300 rounded-lg focus:outline-none focus:ring-[#5db815] focus:border-[#5db815] mb-4"
+                placeholder="Ej: Reporte de maíz - Zona norte"
+                required
+              />
+            </div>
             <div className="space-y-2">
-              {(["weekly", "monthly"] as ReportFrequency[]).map((freq) => (
+              {(["3days", "5days", "weekly", "monthly"] as ReportFrequency[]).map((freq) => (
                 <button
                   key={freq}
                   onClick={() => setFrequency(freq)}
@@ -332,7 +343,7 @@ export default function ReportStepper({ onSave, initialData }: ReportStepperProp
                   }`}
                 >
                   <div className="font-medium text-[#242424]">
-                    {freq === "weekly" ? "Semanal" : "Mensual"}
+                    {getFrequencyLabel(freq)}
                   </div>
                 </button>
               ))}
@@ -345,7 +356,7 @@ export default function ReportStepper({ onSave, initialData }: ReportStepperProp
                 NDVI está seleccionado por defecto. Puedes agregar más índices si lo deseas.
               </p>
               <div className="space-y-2">
-                {(["NDVI", "NDRE", "EVI"] as IndexType[]).map((indexType) => (
+                {(["NDVI", "NDRE", "EVI", "NDWI", "MSAVI", "PSRI"] as IndexType[]).map((indexType) => (
                   <label
                     key={indexType}
                     className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg cursor-pointer hover:border-gray-300 transition-colors"
@@ -371,6 +382,9 @@ export default function ReportStepper({ onSave, initialData }: ReportStepperProp
                         {indexType === "NDVI" && "Salud general y cobertura vegetal"}
                         {indexType === "NDRE" && "Contenido de clorofila y nutrición"}
                         {indexType === "EVI" && "Biomasa y productividad"}
+                        {indexType === "NDWI" && "Estrés hídrico y problemas de riego"}
+                        {indexType === "MSAVI" && "Emergencia y establecimiento temprano"}
+                        {indexType === "PSRI" && "Senescencia y presión de enfermedades"}
                       </div>
                     </div>
                   </label>
@@ -408,6 +422,14 @@ export default function ReportStepper({ onSave, initialData }: ReportStepperProp
               </p>
             </div>
             <div className="space-y-4 bg-gray-50 rounded-lg p-4">
+              {reportName && (
+                <div>
+                  <span className="text-sm font-medium text-[#898989]">Nombre:</span>
+                  <p className="text-[#242424] font-medium mt-1">
+                    {reportName}
+                  </p>
+                </div>
+              )}
               <div>
                 <span className="text-sm font-medium text-[#898989]">Parcelas:</span>
                 <p className="text-[#242424] font-medium mt-1">

@@ -38,6 +38,51 @@ export function calculateEVI(image: ee.Image): ee.Image {
 }
 
 /**
+ * Calculate NDWI (Normalized Difference Water Index)
+ * Also known as NDMI (Normalized Difference Moisture Index)
+ * Formula: (NIR - SWIR) / (NIR + SWIR)
+ * Sentinel-2 bands: NIR = B8, SWIR = B11
+ * Primary use: Water stress / irrigation problems
+ * Detects plant water content drops before chlorophyll or biomass decline
+ */
+export function calculateNDWI(image: ee.Image): ee.Image {
+  const nir = image.select("B8");
+  const swir = image.select("B11");
+  return nir.subtract(swir).divide(nir.add(swir)).rename("NDWI");
+}
+
+/**
+ * Calculate MSAVI (Modified Soil Adjusted Vegetation Index)
+ * Formula: (2*NIR + 1 - sqrt((2*NIR + 1)^2 - 8*(NIR - Red))) / 2
+ * Sentinel-2 bands: NIR = B8, Red = B4
+ * Primary use: Poor emergence, uneven stands, early crop failure
+ * Removes soil noise automatically, critical in early season
+ */
+export function calculateMSAVI(image: ee.Image): ee.Image {
+  const nir = image.select("B8");
+  const red = image.select("B4");
+  const twoNirPlusOne = nir.multiply(2).add(1);
+  const nirMinusRed = nir.subtract(red);
+  // Calculate square root using instance method
+  const sqrtTerm = twoNirPlusOne.multiply(twoNirPlusOne).subtract(nirMinusRed.multiply(8)).sqrt();
+  return twoNirPlusOne.subtract(sqrtTerm).divide(2).rename("MSAVI");
+}
+
+/**
+ * Calculate PSRI (Plant Senescence Reflectance Index)
+ * Formula: (Red - Green) / Red Edge
+ * Sentinel-2 bands: Red = B4, Green = B3, Red Edge = B5
+ * Primary use: Senescence, disease pressure, or crop aging vs healthy stress
+ * Distinguishes natural maturity from stress-induced decline
+ */
+export function calculatePSRI(image: ee.Image): ee.Image {
+  const red = image.select("B4");
+  const green = image.select("B3");
+  const redEdge = image.select("B5");
+  return red.subtract(green).divide(redEdge).rename("PSRI");
+}
+
+/**
  * Calculate the specified index for an image
  */
 export function calculateIndex(image: ee.Image, indexType: IndexType): ee.Image {
@@ -48,6 +93,12 @@ export function calculateIndex(image: ee.Image, indexType: IndexType): ee.Image 
       return calculateNDRE(image);
     case "EVI":
       return calculateEVI(image);
+    case "NDWI":
+      return calculateNDWI(image);
+    case "MSAVI":
+      return calculateMSAVI(image);
+    case "PSRI":
+      return calculatePSRI(image);
     default:
       throw new Error(`Unknown index type: ${indexType}`);
   }

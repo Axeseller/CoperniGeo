@@ -312,8 +312,12 @@ export default function InteractiveMap({
                   <div className="flex items-center space-x-2">
                     <div
                       className={`h-3 rounded flex-1 ${
-                        imageData.indexType === "NDVI" || imageData.indexType === "NDRE"
+                        imageData.indexType === "NDVI" || imageData.indexType === "NDRE" || imageData.indexType === "MSAVI"
                           ? "bg-gradient-to-r from-red-500 via-yellow-500 to-green-500"
+                          : imageData.indexType === "NDWI"
+                          ? "bg-gradient-to-r from-amber-800 via-yellow-400 via-cyan-400 to-blue-500"
+                          : imageData.indexType === "PSRI"
+                          ? "bg-gradient-to-r from-green-500 via-yellow-400 via-orange-500 to-red-500"
                           : "bg-gradient-to-r from-blue-500 via-cyan-500 via-yellow-500 via-orange-500 to-red-500"
                       }`}
                     ></div>

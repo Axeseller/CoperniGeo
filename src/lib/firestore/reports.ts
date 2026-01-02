@@ -112,9 +112,15 @@ export async function createReport(
     
     // Normalize phone number if provided (remove all non-digits)
     // This ensures consistent storage format
-    // Only include phoneNumber/email if they have values (Firestore doesn't allow undefined)
+    // Firestore doesn't allow undefined values, so we must filter them out
     const normalizedReport: any = {
-      ...report,
+      userId: report.userId,
+      areaIds: report.areaIds,
+      indices: report.indices,
+      cloudCoverage: report.cloudCoverage,
+      frequency: report.frequency,
+      deliveryMethod: report.deliveryMethod,
+      status: report.status,
     };
     
     // Only include phoneNumber if provided
@@ -126,13 +132,27 @@ export async function createReport(
     if (report.email) {
       normalizedReport.email = report.email;
     }
+    
+    // Only include name if provided
+    if (report.name) {
+      normalizedReport.name = report.name;
+    }
   
   const db = getDb();
-  const reportData = {
+  const reportDataRaw = {
       ...normalizedReport,
     nextRun: Timestamp.fromDate(nextRun),
     createdAt: Timestamp.now(),
   };
+  
+  // Remove any undefined values (Firestore doesn't allow undefined)
+  const reportData: any = {};
+  Object.keys(reportDataRaw).forEach((key) => {
+    const value = (reportDataRaw as any)[key];
+    if (value !== undefined) {
+      reportData[key] = value;
+    }
+  });
     
     console.log("[Firestore] Creating report with data:", {
       userId: reportData.userId,

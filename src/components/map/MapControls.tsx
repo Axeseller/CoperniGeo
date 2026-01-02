@@ -90,6 +90,9 @@ export default function MapControls({
           <option value="NDVI">NDVI</option>
           <option value="NDRE">NDRE</option>
           <option value="EVI">EVI</option>
+          <option value="NDWI">NDWI</option>
+          <option value="MSAVI">MSAVI</option>
+          <option value="PSRI">PSRI</option>
         </select>
       </div>
 
