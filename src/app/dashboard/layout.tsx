@@ -61,10 +61,26 @@ export default function DashboardLayout({
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-[#f4f3f4]">
-        <div className="flex">
-          {/* Minimal Left Nav: icons + labels */}
-          <aside className="w-56 bg-white border-r border-gray-200 min-h-screen rounded-r-2xl">
+      <div className="min-h-screen bg-[#f4f3f4] flex flex-col">
+        {/* Mobile Header - Only visible on mobile */}
+        <header className="md:hidden bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-10">
+          <Link href="/" className="flex items-center space-x-2">
+            <Image
+              src="/logo2.svg"
+              alt="CoperniGeo Logo"
+              width={32}
+              height={32}
+              className="w-8 h-8"
+            />
+            <h1 className="text-xl font-bold text-[#5db815]">
+              CoperniGeo
+            </h1>
+          </Link>
+        </header>
+
+        <div className="flex flex-1">
+          {/* Desktop Sidebar: Hidden on mobile, visible on md+ */}
+          <aside className="hidden md:block w-56 bg-white border-r border-gray-200 min-h-screen rounded-r-2xl">
             <div className="p-6">
               <Link href="/" className="flex items-center space-x-2 mb-8">
                 <Image
@@ -101,10 +117,35 @@ export default function DashboardLayout({
           </aside>
 
           {/* Main Content: Center single column, max 720px */}
-          <main className="flex-1 flex justify-center px-4 py-8">
+          <main className="flex-1 flex justify-center px-4 py-4 md:py-8 pb-20 md:pb-8">
             <div className="w-full max-w-[720px]">{children}</div>
           </main>
         </div>
+
+        {/* Mobile Bottom Navigation - Only visible on mobile */}
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-10 safe-area-bottom">
+          <div className="flex justify-around items-center h-16 px-2">
+            {navItems.map((item) => {
+              const active = isActive(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
+                    active
+                      ? "text-[#5db815]"
+                      : "text-gray-500"
+                  }`}
+                >
+                  {item.icon}
+                  <span className={`text-xs mt-1 ${active ? "font-medium" : ""}`}>
+                    {item.label.split(" ")[0]}
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
       </div>
     </ProtectedRoute>
   );

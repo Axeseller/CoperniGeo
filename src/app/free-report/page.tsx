@@ -47,7 +47,11 @@ function FreeReportPageContent() {
   const [error, setError] = useState("");
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [checkingEmail, setCheckingEmail] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [searchAddress, setSearchAddress] = useState("");
   const drawingManagerRef = useRef<google.maps.drawing.DrawingManager | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Find existing lead if email was provided from homepage
   useEffect(() => {
@@ -238,54 +242,180 @@ function FreeReportPageContent() {
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!leadId) {
-      setError("Error: No se encontró la información del lead");
+  const handleAddressSearch = async () => {
+    if (!map || !searchAddress.trim()) {
+      setError("No se pudo buscar la ubicación. Por favor intenta de nuevo.");
       return;
     }
 
-    setIsSubmitting(true);
-    setError("");
-
     try {
-      const text = await file.text();
-      let geoJson: GeoJSON.Polygon | GeoJSON.MultiPolygon;
+      // Use Places API (New) via REST
+      const autocompleteResponse = await fetch("/api/places/autocomplete", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ input: searchAddress }),
+      });
 
-      // Try to parse as GeoJSON
-      try {
-        const parsed = JSON.parse(text);
-        if (parsed.type === "FeatureCollection" && parsed.features?.[0]?.geometry) {
-          geoJson = parsed.features[0].geometry;
-        } else if (parsed.type === "Polygon" || parsed.type === "MultiPolygon") {
-          geoJson = parsed;
-        } else {
-          throw new Error("Formato GeoJSON no válido");
-        }
-      } catch {
-        // If not JSON, try to parse as KML (simplified - would need proper KML parser in production)
-        throw new Error("Por favor sube un archivo GeoJSON válido. El soporte para KML estará disponible pronto.");
+      if (!autocompleteResponse.ok) {
+        setError("No se encontraron resultados. Por favor intenta con una dirección más específica.");
+        return;
       }
 
-      await updateLeadWithGeometry(leadId, geoJson, 'snapshot_requested');
+      const autocompleteData = await autocompleteResponse.json();
       
-      // Trigger report generation and email sending (async, don't wait)
-      fetch(`/api/leads/${leadId}/send-report`, {
-        method: 'POST',
-      }).catch((err) => {
-        console.error("Error triggering report generation:", err);
-        // Don't show error to user - report will be generated in background
+      // Get the first suggestion
+      const firstSuggestion = autocompleteData?.suggestions?.[0]?.placePrediction;
+      if (!firstSuggestion?.placeId) {
+        setError("No se encontraron resultados. Por favor intenta con una dirección más específica.");
+        return;
+      }
+
+      // Get place details
+      const detailsResponse = await fetch("/api/places/details", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ placeId: firstSuggestion.placeId }),
       });
+
+      if (!detailsResponse.ok) {
+        setError("No se pudo encontrar la ubicación. Por favor intenta con una dirección más específica.");
+        return;
+      }
+
+      const placeData = await detailsResponse.json();
       
-      setStep("confirmation");
-    } catch (err: any) {
-      setError(err.message || "Error al procesar el archivo. Por favor verifica que sea un GeoJSON válido.");
-    } finally {
-      setIsSubmitting(false);
+      // Center map on the selected place
+      if (placeData.location) {
+        const lat = placeData.location.latitude;
+        const lng = placeData.location.longitude;
+        const location = new google.maps.LatLng(lat, lng);
+        map.setCenter(location);
+        map.setZoom(15);
+      }
+      
+      // If viewport is available, use it
+      if (placeData.viewport) {
+        const bounds = new google.maps.LatLngBounds(
+          new google.maps.LatLng(
+            placeData.viewport.low.latitude,
+            placeData.viewport.low.longitude
+          ),
+          new google.maps.LatLng(
+            placeData.viewport.high.latitude,
+            placeData.viewport.high.longitude
+          )
+        );
+        map.fitBounds(bounds);
+      }
+      
+      setError("");
+    } catch (error) {
+      console.error("Error searching for address:", error);
+      setError("Error al buscar la ubicación. Por favor intenta de nuevo.");
     }
   };
+
+  const handleCoordinateSearch = () => {
+    // Parse coordinates (lat, lng) or (lng, lat)
+    const coordPattern = /(-?\d+\.?\d*)\s*[,;]\s*(-?\d+\.?\d*)/;
+    const match = searchAddress.match(coordPattern);
+    
+    if (!match) {
+      setError("Formato de coordenadas inválido. Usa: lat, lng (ej: 20.6597, -103.3496)");
+      return;
+    }
+
+    const lat = parseFloat(match[1]);
+    const lng = parseFloat(match[2]);
+
+    if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      setError("Coordenadas inválidas. Latitud debe estar entre -90 y 90, Longitud entre -180 y 180.");
+      return;
+    }
+
+    if (!map) return;
+
+    const location = new google.maps.LatLng(lat, lng);
+    map.setCenter(location);
+    map.setZoom(15);
+    setError("");
+  };
+
+  const handleSearch = () => {
+    setError("");
+    
+    // Check if it's coordinates
+    if (/^-?\d+\.?\d*\s*[,;]\s*-?\d+\.?\d*/.test(searchAddress.trim())) {
+      handleCoordinateSearch();
+    } else {
+      handleAddressSearch();
+    }
+  };
+
+  const toggleFullscreen = useCallback(() => {
+    // Find the map container div (the one with the GoogleMap)
+    const mapContainer = mapContainerRef.current?.querySelector('.relative') as HTMLElement;
+    if (!mapContainer) return;
+
+    // Check current fullscreen state
+    const isCurrentlyFullscreen = !!(
+      document.fullscreenElement ||
+      (document as any).webkitFullscreenElement ||
+      (document as any).mozFullScreenElement ||
+      (document as any).msFullscreenElement
+    );
+
+    if (!isCurrentlyFullscreen) {
+      // Enter fullscreen - use the map container div
+      const element = mapContainer;
+      if (element.requestFullscreen) {
+        element.requestFullscreen().catch((err) => {
+          console.error("Error entering fullscreen:", err);
+        });
+      } else if ((element as any).webkitRequestFullscreen) {
+        (element as any).webkitRequestFullscreen();
+      } else if ((element as any).mozRequestFullScreen) {
+        (element as any).mozRequestFullScreen();
+      } else if ((element as any).msRequestFullscreen) {
+        (element as any).msRequestFullscreen();
+      }
+    } else {
+      // Exit fullscreen
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch((err) => {
+          console.error("Error exiting fullscreen:", err);
+        });
+      } else if ((document as any).webkitExitFullscreen) {
+        (document as any).webkitExitFullscreen();
+      } else if ((document as any).mozCancelFullScreen) {
+        (document as any).mozCancelFullScreen();
+      } else if ((document as any).msExitFullscreen) {
+        (document as any).msExitFullscreen();
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement || !!(document as any).webkitFullscreenElement || !!(document as any).mozFullScreenElement || !!(document as any).msFullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
+  }, []);
 
   const onDrawingManagerLoad = useCallback((drawingManager: google.maps.drawing.DrawingManager) => {
     drawingManagerRef.current = drawingManager;
@@ -454,20 +584,68 @@ function FreeReportPageContent() {
                 <p className="text-[#898989] mb-4">
                   Para generar tu reporte gratuito, selecciona tu campo en el mapa a continuación.
                 </p>
+                <p className="text-sm text-[#898989] mb-2">
+                  <strong>Buscar ubicación:</strong> Usa el buscador para encontrar tu campo por dirección, coordenadas (lat, lng) o código postal.
+                </p>
                 <p className="text-sm text-[#898989] mb-6">
                   <strong>¿Cómo dibujar un polígono?</strong> Haz clic en el botón de dibujar en el mapa y luego haz clic en el mapa para crear los puntos de tu campo. Haz doble clic o cierra el polígono para finalizar.
                 </p>
               </div>
 
-              <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+              {/* Address/Coordinate Search - Outside map */}
+              <div className="bg-white rounded-lg shadow-lg p-2 flex gap-2">
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchAddress}
+                  onChange={(e) => setSearchAddress(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSearch();
+                    }
+                  }}
+                  placeholder="Buscar dirección, coordenadas o código postal"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#5db815] focus:border-transparent text-sm text-[#242424] bg-white placeholder:text-gray-500"
+                />
+                <button
+                  onClick={handleSearch}
+                  className="bg-[#5db815] text-white px-4 py-2 rounded-md hover:bg-[#4a9a11] transition-colors text-sm font-medium"
+                >
+                  Buscar
+                </button>
+              </div>
+
+              <div className="bg-white rounded-lg shadow-lg overflow-hidden" ref={mapContainerRef}>
                 {loadError ? (
                   <div className="p-8 text-center text-red-600">
                     Error al cargar el mapa. Por favor recarga la página.
                   </div>
                 ) : (
                   <div className="relative">
+                    {/* Mobile Fullscreen Button */}
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        toggleFullscreen();
+                      }}
+                      className="md:hidden absolute top-4 right-4 z-[100] bg-white p-2 rounded-lg shadow-lg border border-gray-300 hover:bg-gray-50 transition-colors"
+                      aria-label="Pantalla completa"
+                      type="button"
+                    >
+                      {isFullscreen ? (
+                        <svg className="w-6 h-6 text-[#242424]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      ) : (
+                        <svg className="w-6 h-6 text-[#242424]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                        </svg>
+                      )}
+                    </button>
                     <GoogleMap
-                      mapContainerStyle={{ width: "100%", height: "600px" }}
+                      mapContainerStyle={isFullscreen ? { width: "100vw", height: "100vh" } : { width: "100%", height: "600px" }}
                       center={defaultMapCenter}
                       zoom={defaultMapZoom}
                       onLoad={onMapLoad}
@@ -536,20 +714,7 @@ function FreeReportPageContent() {
                   {isSubmitting ? "Procesando..." : "Generar Reporte Gratis"}
                 </button>
 
-                <div className="border-t border-gray-200 pt-4 space-y-3">
-                  <label className="block">
-                    <input
-                      type="file"
-                      accept=".json,.geojson"
-                      onChange={handleFileUpload}
-                      className="hidden"
-                      disabled={isSubmitting}
-                    />
-                    <span className="block w-full border border-gray-300 text-[#121212] px-6 py-3 rounded-md font-medium hover:bg-gray-50 transition-colors text-center cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
-                      {isSubmitting ? "Procesando..." : "Subir límite del campo (GeoJSON)"}
-                    </span>
-                  </label>
-
+                <div className="border-t border-gray-200 pt-4">
                   <button
                     onClick={handleManualMapping}
                     disabled={isSubmitting}

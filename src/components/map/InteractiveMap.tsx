@@ -37,8 +37,12 @@ export default function InteractiveMap({
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [drawnPolygon, setDrawnPolygon] = useState<{ lat: number; lng: number }[] | null>(null);
   const [visibleIndices, setVisibleIndices] = useState<Set<string>>(new Set());
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [searchAddress, setSearchAddress] = useState("");
   const drawingManagerRef = useRef<google.maps.drawing.DrawingManager | null>(null);
   const overlaysRef = useRef<Map<string, google.maps.ImageMapType>>(new Map());
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: "google-map-script",
@@ -88,6 +92,169 @@ export default function InteractiveMap({
     if (drawingManagerRef.current) {
       drawingManagerRef.current.setDrawingMode(null);
     }
+  }, []);
+
+  const handleAddressSearch = useCallback(async () => {
+    if (!map || !searchAddress.trim()) return;
+
+    try {
+      // Use Places API (New) via REST
+      const autocompleteResponse = await fetch("/api/places/autocomplete", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ input: searchAddress }),
+      });
+
+      if (!autocompleteResponse.ok) {
+        console.error("Failed to get autocomplete suggestions");
+        return;
+      }
+
+      const autocompleteData = await autocompleteResponse.json();
+      
+      // Get the first suggestion
+      const firstSuggestion = autocompleteData?.suggestions?.[0]?.placePrediction;
+      if (!firstSuggestion?.placeId) {
+        return;
+      }
+
+      // Get place details
+      const detailsResponse = await fetch("/api/places/details", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ placeId: firstSuggestion.placeId }),
+      });
+
+      if (!detailsResponse.ok) {
+        console.error("Failed to get place details");
+        return;
+      }
+
+      const placeData = await detailsResponse.json();
+      
+      // Center map on the selected place
+      if (placeData.location) {
+        const lat = placeData.location.latitude;
+        const lng = placeData.location.longitude;
+        const location = new google.maps.LatLng(lat, lng);
+        map.setCenter(location);
+        map.setZoom(15);
+      }
+      
+      // If viewport is available, use it
+      if (placeData.viewport) {
+        const bounds = new google.maps.LatLngBounds(
+          new google.maps.LatLng(
+            placeData.viewport.low.latitude,
+            placeData.viewport.low.longitude
+          ),
+          new google.maps.LatLng(
+            placeData.viewport.high.latitude,
+            placeData.viewport.high.longitude
+          )
+        );
+        map.fitBounds(bounds);
+      }
+    } catch (error) {
+      console.error("Error searching for address:", error);
+    }
+  }, [map, searchAddress]);
+
+  const handleCoordinateSearch = useCallback(() => {
+    if (!map) return;
+
+    // Parse coordinates (lat, lng) or (lng, lat)
+    const coordPattern = /(-?\d+\.?\d*)\s*[,;]\s*(-?\d+\.?\d*)/;
+    const match = searchAddress.match(coordPattern);
+    
+    if (!match) {
+      return;
+    }
+
+    const lat = parseFloat(match[1]);
+    const lng = parseFloat(match[2]);
+
+    if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      return;
+    }
+
+    const location = new google.maps.LatLng(lat, lng);
+    map.setCenter(location);
+    map.setZoom(15);
+  }, [map, searchAddress]);
+
+  const handleSearch = useCallback(() => {
+    // Check if it's coordinates
+    if (/^-?\d+\.?\d*\s*[,;]\s*-?\d+\.?\d*/.test(searchAddress.trim())) {
+      handleCoordinateSearch();
+    } else {
+      handleAddressSearch();
+    }
+  }, [searchAddress, handleCoordinateSearch, handleAddressSearch]);
+
+  const toggleFullscreen = useCallback(() => {
+    // Find the map container div (the one with the GoogleMap)
+    const mapContainer = mapContainerRef.current?.querySelector('.relative') as HTMLElement;
+    if (!mapContainer) return;
+
+    // Check current fullscreen state
+    const isCurrentlyFullscreen = !!(
+      document.fullscreenElement ||
+      (document as any).webkitFullscreenElement ||
+      (document as any).mozFullScreenElement ||
+      (document as any).msFullscreenElement
+    );
+
+    if (!isCurrentlyFullscreen) {
+      // Enter fullscreen - use the map container div
+      const element = mapContainer;
+      if (element.requestFullscreen) {
+        element.requestFullscreen().catch((err) => {
+          console.error("Error entering fullscreen:", err);
+        });
+      } else if ((element as any).webkitRequestFullscreen) {
+        (element as any).webkitRequestFullscreen();
+      } else if ((element as any).mozRequestFullScreen) {
+        (element as any).mozRequestFullScreen();
+      } else if ((element as any).msRequestFullscreen) {
+        (element as any).msRequestFullscreen();
+      }
+    } else {
+      // Exit fullscreen
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch((err) => {
+          console.error("Error exiting fullscreen:", err);
+        });
+      } else if ((document as any).webkitExitFullscreen) {
+        (document as any).webkitExitFullscreen();
+      } else if ((document as any).mozCancelFullScreen) {
+        (document as any).mozCancelFullScreen();
+      } else if ((document as any).msExitFullscreen) {
+        (document as any).msExitFullscreen();
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement || !!(document as any).webkitFullscreenElement || !!(document as any).mozFullScreenElement || !!(document as any).msFullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
   }, []);
 
   // Toggle visibility of an index
@@ -185,19 +352,68 @@ export default function InteractiveMap({
   }
 
   return (
-    <div className="relative">
-      <GoogleMap
-        mapContainerStyle={mapContainerStyle}
-        zoom={6}
-        center={defaultCenter}
-        onLoad={onMapLoad}
-        onUnmount={onMapUnmount}
-        options={{
-          mapTypeControl: true,
-          streetViewControl: false,
-          fullscreenControl: true,
-        }}
-      >
+    <div className="space-y-4" ref={mapContainerRef}>
+      {/* Address/Coordinate Search - Outside map */}
+      {!disableDrawing && (
+        <div className="bg-white rounded-lg shadow-lg p-2 flex gap-2">
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={searchAddress}
+            onChange={(e) => setSearchAddress(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleSearch();
+              }
+            }}
+            placeholder="Buscar dirección, coordenadas o código postal"
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#5db815] focus:border-transparent text-sm text-[#242424] bg-white placeholder:text-gray-500"
+          />
+          <button
+            onClick={handleSearch}
+            className="bg-[#5db815] text-white px-4 py-2 rounded-md hover:bg-[#4a9a11] transition-colors text-sm font-medium"
+          >
+            Buscar
+          </button>
+        </div>
+      )}
+
+      {/* Map Container */}
+      <div className="relative">
+        {/* Mobile Fullscreen Button */}
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleFullscreen();
+          }}
+          className="md:hidden absolute top-4 right-4 z-[100] bg-white p-2 rounded-lg shadow-lg border border-gray-300 hover:bg-gray-50 transition-colors"
+          aria-label="Pantalla completa"
+          type="button"
+        >
+          {isFullscreen ? (
+            <svg className="w-6 h-6 text-[#242424]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          ) : (
+            <svg className="w-6 h-6 text-[#242424]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+            </svg>
+          )}
+        </button>
+        <GoogleMap
+          mapContainerStyle={isFullscreen ? { width: "100vw", height: "100vh" } : mapContainerStyle}
+          zoom={6}
+          center={defaultCenter}
+          onLoad={onMapLoad}
+          onUnmount={onMapUnmount}
+          options={{
+            mapTypeControl: true,
+            streetViewControl: false,
+            fullscreenControl: true,
+          }}
+        >
         {!disableDrawing && (
         <DrawingManager
           onLoad={onDrawingManagerLoad}
@@ -336,6 +552,7 @@ export default function InteractiveMap({
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

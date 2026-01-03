@@ -351,7 +351,7 @@ export default function Home() {
         {/* Dashboard Preview */}
         <div className="mt-24 max-w-7xl mx-auto">
           {/* Mobile Carousel */}
-          <div className="md:hidden relative">
+          <div className="hidden relative">
             <div 
               ref={carouselRef}
               className="overflow-x-auto snap-x snap-mandatory scrollbar-hide -mx-4 px-4 flex gap-4"
