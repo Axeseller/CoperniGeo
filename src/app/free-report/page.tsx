@@ -357,47 +357,95 @@ function FreeReportPageContent() {
   };
 
   const toggleFullscreen = useCallback(() => {
-    // Find the map container div (the one with the GoogleMap)
-    const mapContainer = mapContainerRef.current?.querySelector('.relative') as HTMLElement;
-    if (!mapContainer) return;
-
-    // Check current fullscreen state
-    const isCurrentlyFullscreen = !!(
-      document.fullscreenElement ||
-      (document as any).webkitFullscreenElement ||
-      (document as any).mozFullScreenElement ||
-      (document as any).msFullscreenElement
-    );
-
-    if (!isCurrentlyFullscreen) {
-      // Enter fullscreen - use the map container div
-      const element = mapContainer;
-      if (element.requestFullscreen) {
-        element.requestFullscreen().catch((err) => {
-          console.error("Error entering fullscreen:", err);
-        });
-      } else if ((element as any).webkitRequestFullscreen) {
-        (element as any).webkitRequestFullscreen();
-      } else if ((element as any).mozRequestFullScreen) {
-        (element as any).mozRequestFullScreen();
-      } else if ((element as any).msRequestFullscreen) {
-        (element as any).msRequestFullscreen();
+    // Check if we're on mobile (screen width < 768px)
+    const isMobile = window.innerWidth < 768;
+    
+    if (isMobile) {
+      // On mobile, use CSS-based fullscreen (fixed positioning)
+      const newFullscreenState = !isFullscreen;
+      setIsFullscreen(newFullscreenState);
+      
+      // Prevent body scroll and touch events when in fullscreen
+      if (newFullscreenState) {
+        // Store original values
+        const scrollY = window.scrollY;
+        
+        // Prevent scrolling - use a wrapper approach that doesn't affect positioning
+        document.body.style.overflow = 'hidden';
+        document.body.style.height = '100vh';
+        document.body.style.touchAction = 'none';
+        
+        // Also prevent html scrolling
+        document.documentElement.style.overflow = 'hidden';
+        document.documentElement.style.height = '100vh';
+        document.documentElement.style.touchAction = 'none';
+        
+        // Store scroll position for restoration
+        (document.body as any).__fullscreenScrollY = scrollY;
+      } else {
+        // Restore scrolling
+        const scrollY = (document.body as any).__fullscreenScrollY || 0;
+        document.body.style.overflow = '';
+        document.body.style.height = '';
+        document.body.style.touchAction = '';
+        document.documentElement.style.overflow = '';
+        document.documentElement.style.height = '';
+        document.documentElement.style.touchAction = '';
+        
+        // Restore scroll position
+        window.scrollTo(0, scrollY);
+        delete (document.body as any).__fullscreenScrollY;
       }
+      
+      // Trigger map resize after a short delay to ensure proper rendering
+      setTimeout(() => {
+        if (map) {
+          google.maps.event.trigger(map, 'resize');
+        }
+      }, 100);
     } else {
-      // Exit fullscreen
-      if (document.exitFullscreen) {
-        document.exitFullscreen().catch((err) => {
-          console.error("Error exiting fullscreen:", err);
-        });
-      } else if ((document as any).webkitExitFullscreen) {
-        (document as any).webkitExitFullscreen();
-      } else if ((document as any).mozCancelFullScreen) {
-        (document as any).mozCancelFullScreen();
-      } else if ((document as any).msExitFullscreen) {
-        (document as any).msExitFullscreen();
+      // On desktop, use native fullscreen API
+      const mapContainer = mapContainerRef.current?.querySelector('.relative') as HTMLElement;
+      if (!mapContainer) return;
+
+      // Check current fullscreen state
+      const isCurrentlyFullscreen = !!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      );
+
+      if (!isCurrentlyFullscreen) {
+        // Enter fullscreen - use the map container div
+        const element = mapContainer;
+        if (element.requestFullscreen) {
+          element.requestFullscreen().catch((err) => {
+            console.error("Error entering fullscreen:", err);
+          });
+        } else if ((element as any).webkitRequestFullscreen) {
+          (element as any).webkitRequestFullscreen();
+        } else if ((element as any).mozRequestFullScreen) {
+          (element as any).mozRequestFullScreen();
+        } else if ((element as any).msRequestFullscreen) {
+          (element as any).msRequestFullscreen();
+        }
+      } else {
+        // Exit fullscreen
+        if (document.exitFullscreen) {
+          document.exitFullscreen().catch((err) => {
+            console.error("Error exiting fullscreen:", err);
+          });
+        } else if ((document as any).webkitExitFullscreen) {
+          (document as any).webkitExitFullscreen();
+        } else if ((document as any).mozCancelFullScreen) {
+          (document as any).mozCancelFullScreen();
+        } else if ((document as any).msExitFullscreen) {
+          (document as any).msExitFullscreen();
+        }
       }
     }
-  }, []);
+  }, [isFullscreen, map]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -414,8 +462,25 @@ function FreeReportPageContent() {
       document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
       document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
       document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+      // Cleanup: restore body overflow on unmount
+      document.body.style.overflow = '';
     };
   }, []);
+
+  // Cleanup body overflow when fullscreen state changes
+  useEffect(() => {
+    if (!isFullscreen) {
+      const scrollY = (document.body as any).__fullscreenScrollY || 0;
+      document.body.style.overflow = '';
+      document.body.style.height = '';
+      document.body.style.touchAction = '';
+      document.documentElement.style.overflow = '';
+      document.documentElement.style.height = '';
+      document.documentElement.style.touchAction = '';
+      window.scrollTo(0, scrollY);
+      delete (document.body as any).__fullscreenScrollY;
+    }
+  }, [isFullscreen]);
 
   const onDrawingManagerLoad = useCallback((drawingManager: google.maps.drawing.DrawingManager) => {
     drawingManagerRef.current = drawingManager;
@@ -622,7 +687,27 @@ function FreeReportPageContent() {
                     Error al cargar el mapa. Por favor recarga la página.
                   </div>
                 ) : (
-                  <div className="relative">
+                  <div 
+                    className={isFullscreen ? 'fixed z-[9999] bg-white' : 'relative'}
+                    style={isFullscreen ? { 
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      width: '100vw', 
+                      height: '100vh',
+                      margin: 0,
+                      padding: 0,
+                      touchAction: 'auto', // Allow touch on map itself
+                      position: 'fixed', // Explicitly set position
+                    } : undefined}
+                    onTouchMove={(e) => {
+                      // Prevent page scroll when touching the fullscreen map container
+                      if (isFullscreen) {
+                        e.stopPropagation();
+                      }
+                    }}
+                  >
                     {/* Mobile Fullscreen Button */}
                     <button
                       onClick={(e) => {
