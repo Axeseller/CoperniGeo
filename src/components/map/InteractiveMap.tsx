@@ -55,11 +55,64 @@ export default function InteractiveMap({
   }, []);
 
   const onMapUnmount = useCallback(() => {
+    // Clean up drawing manager on unmount
+    if (drawingManagerRef.current) {
+      drawingManagerRef.current.setMap(null);
+      drawingManagerRef.current = null;
+    }
     setMap(null);
   }, []);
 
   const onDrawingManagerLoad = useCallback((drawingManager: google.maps.drawing.DrawingManager) => {
+    // Clean up any existing drawing manager
+    if (drawingManagerRef.current) {
+      drawingManagerRef.current.setMap(null);
+      drawingManagerRef.current = null;
+    }
     drawingManagerRef.current = drawingManager;
+    
+    // Ensure only one drawing control is visible - remove duplicates
+    setTimeout(() => {
+      // Find all drawing controls by looking for the drawing control container
+      const mapContainer = mapContainerRef.current?.querySelector('.relative') || document;
+      const allControls = mapContainer.querySelectorAll('.gm-style .gmnoprint');
+      const drawingControls: HTMLElement[] = [];
+      
+      allControls.forEach((control) => {
+        const htmlControl = control as HTMLElement;
+        // Check if it's a drawing control by looking for polygon/drawing related elements
+        const hasPolygonIcon = htmlControl.querySelector('div[title*="Polygon"], div[title*="Drawing"]');
+        const title = htmlControl.getAttribute('title') || '';
+        const innerHTML = htmlControl.innerHTML || '';
+        
+        if (hasPolygonIcon || title.includes('Drawing') || title.includes('Polygon') || 
+            (innerHTML.includes('polygon') && innerHTML.includes('path'))) {
+          drawingControls.push(htmlControl);
+        }
+      });
+      
+      // If we have more than one, remove the one on the right (closest to right edge)
+      if (drawingControls.length > 1) {
+        // Find the control that's positioned on the right side
+        let rightmostControl: HTMLElement | null = null;
+        let rightmostPosition = -1;
+        
+        drawingControls.forEach((control) => {
+          const rect = control.getBoundingClientRect();
+          const rightPosition = rect.right;
+          if (rightPosition > rightmostPosition) {
+            rightmostPosition = rightPosition;
+            rightmostControl = control;
+          }
+        });
+        
+        // Remove the rightmost control
+        if (rightmostControl) {
+          rightmostControl.style.display = 'none';
+          rightmostControl.remove();
+        }
+      }
+    }, 300);
   }, []);
 
   const onPolygonCompleteCallback = useCallback(
@@ -408,6 +461,80 @@ export default function InteractiveMap({
     }
   }, [map, selectedAreaId, areas]);
 
+  // Remove duplicate drawing controls and adjust position on mobile
+  useEffect(() => {
+    if (!map || disableDrawing) return;
+    
+    // Add CSS to adjust drawing control position - below map type control on both desktop and mobile
+    // Map type control is at LEFT_TOP, drawing control should be directly below it
+    const styleId = 'drawing-control-mobile-style';
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement('style');
+      style.id = styleId;
+      style.textContent = `
+        .gm-style .gmnoprint[title*="Drawing"],
+        .gm-style .gmnoprint[title*="Polygon"],
+        .gm-style .gmnoprint:has(div[title*="Polygon"]),
+        .gm-style .gmnoprint:has(div[title*="Drawing"]) {
+          position: absolute !important;
+          left: 11px !important;
+          top: 80px !important;
+          right: auto !important;
+          transform: none !important;
+          margin: 0 !important;
+          z-index: 99 !important;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    
+    const removeDuplicates = () => {
+      // Wait for controls to render
+      setTimeout(() => {
+        // Find all potential drawing controls
+        const allControls = document.querySelectorAll('.gm-style .gmnoprint');
+        const drawingControls: HTMLElement[] = [];
+        
+        allControls.forEach((control) => {
+          const htmlControl = control as HTMLElement;
+          const innerHTML = htmlControl.innerHTML || '';
+          // Drawing controls typically contain path elements for polygon icon
+          if (innerHTML.includes('M12 2') || innerHTML.includes('polygon') || 
+              htmlControl.querySelector('div[title*="Polygon"]') ||
+              htmlControl.querySelector('div[title*="Drawing"]')) {
+            drawingControls.push(htmlControl);
+          }
+        });
+        
+        // If we have more than one, remove the rightmost one
+        if (drawingControls.length > 1) {
+          let rightmostControl: HTMLElement | null = null;
+          let rightmostPosition = -1;
+          
+          drawingControls.forEach((control) => {
+            const rect = control.getBoundingClientRect();
+            if (rect.right > rightmostPosition) {
+              rightmostPosition = rect.right;
+              rightmostControl = control;
+            }
+          });
+          
+          if (rightmostControl) {
+            rightmostControl.remove();
+          }
+        }
+      }, 500);
+    };
+    
+    removeDuplicates();
+    // Also check after map resize events
+    const listener = google.maps.event.addListener(map, 'idle', removeDuplicates);
+    
+    return () => {
+      google.maps.event.removeListener(listener);
+    };
+  }, [map, disableDrawing]);
+
   if (loadError) {
     return <div>Error loading maps</div>;
   }
@@ -466,7 +593,7 @@ export default function InteractiveMap({
           }
         }}
       >
-        {/* Mobile Fullscreen Button */}
+        {/* Mobile Fullscreen Button - Top right corner */}
         <button
           onClick={(e) => {
             e.preventDefault();
@@ -495,18 +622,25 @@ export default function InteractiveMap({
           onUnmount={onMapUnmount}
           options={{
             mapTypeControl: true,
+            mapTypeControlOptions: {
+              position: google.maps.ControlPosition.LEFT_TOP,
+            },
             streetViewControl: false,
-            fullscreenControl: true,
+            fullscreenControl: true, // Enable fullscreen control on desktop
+            fullscreenControlOptions: {
+              position: google.maps.ControlPosition.RIGHT_TOP,
+            },
           }}
         >
         {!disableDrawing && (
         <DrawingManager
+          key="drawing-manager"
           onLoad={onDrawingManagerLoad}
           onPolygonComplete={onPolygonCompleteCallback}
           options={{
             drawingControl: true,
             drawingControlOptions: {
-              position: google.maps.ControlPosition.TOP_CENTER,
+              position: google.maps.ControlPosition.LEFT_TOP,
               drawingModes: [google.maps.drawing.OverlayType.POLYGON],
             },
             polygonOptions: {
